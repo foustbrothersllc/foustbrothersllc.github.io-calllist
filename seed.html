@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Seed Database</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+    button { padding: 14px 28px; font-size: 16px; font-weight: bold; background: #351C15; color: #FFB500; border: none; border-radius: 10px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #log { margin-top: 20px; font-size: 14px; line-height: 1.8; white-space: pre-wrap; background: #f5f5f5; padding: 16px; border-radius: 8px; min-height: 100px; }
+  </style>
+</head>
+<body>
+  <h2>🌱 Seed Firestore Database</h2>
+  <p>Click the button to load all drivers from <code>drivers.json</code> into Firestore. Keep this tab open until it says Done.</p>
+  <button id="seedBtn">Start Seeding</button>
+  <div id="log">Ready. Press Start Seeding to begin.</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyDVgCrg8HyEgOLEN0f3A9L4LcqWhOqMX_g",
+  authDomain:        "call-list-editer.firebaseapp.com",
+  projectId:         "call-list-editer",
+  storageBucket:     "call-list-editer.firebasestorage.app",
+  messagingSenderId: "321715928634",
+  appId:             "1:321715928634:web:758162c068fe8ebaf17f03"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const log = document.getElementById('log');
+const btn = document.getElementById('seedBtn');
+
+function driverKey(lastName, firstName) {
+  return (lastName + '|' + firstName).toLowerCase();
+}
+function keyToDocId(key) {
+  return key.replace(/[^a-z0-9|]/g, '_');
+}
+
+btn.addEventListener('click', async function() {
+  btn.disabled = true;
+  log.textContent = 'Fetching drivers.json...\n';
+
+  let drivers;
+  try {
+    const r = await fetch('drivers.json');
+    drivers = await r.json();
+    log.textContent += 'Loaded ' + drivers.length + ' drivers.\n';
+  } catch(e) {
+    log.textContent += 'ERROR loading JSON: ' + e.message;
+    btn.disabled = false;
+    return;
+  }
+
+  let done = 0;
+  const total = drivers.length;
+  const BATCH = 5;
+
+  for (let i = 0; i < drivers.length; i += BATCH) {
+    const batch = drivers.slice(i, i + BATCH);
+    try {
+      await Promise.all(batch.map(function(driver) {
+        const key = driverKey(driver.lastName, driver.firstName);
+        return setDoc(doc(db, 'drivers', keyToDocId(key)), driver);
+      }));
+      done += batch.length;
+      log.textContent += 'Wrote ' + done + ' / ' + total + '\n';
+      log.scrollTop = log.scrollHeight;
+    } catch(e) {
+      log.textContent += 'ERROR at batch ' + i + ': ' + e.message + '\n';
+      btn.disabled = false;
+      return;
+    }
+    // Wait 500ms between batches
+    await new Promise(function(res) { setTimeout(res, 500); });
+  }
+
+  log.textContent += '\n✅ DONE! ' + total + ' drivers seeded successfully.';
+  btn.textContent = '✅ Done!';
+});
+</script>
+</body>
+</html>
