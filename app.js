@@ -736,8 +736,12 @@ let isAdmin = false;
   }
 
   // Sign in anonymously first so Firestore auth works, then load
-  signInAnonymously(auth).then(function() {
+  console.log('Attempting anonymous sign in...');
+  signInAnonymously(auth).then(function(userCredential) {
+    console.log('Signed in anonymously:', userCredential.user.uid);
+    console.log('Starting Firestore listener...');
     return onSnapshot(driversCol, function(snapshot) {
+      console.log('Snapshot received, docs:', snapshot.size);
       removeLoadingMsg();
       const drivers = [];
       snapshot.forEach(function(d) { drivers.push(d.data()); });
