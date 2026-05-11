@@ -524,24 +524,14 @@ let isAdmin = false;
   // Trigger: hold down the driver count bar for 1.5 seconds
   function showAdminControls() {
     fabAdd.style.display = 'flex';
-    // Show import button in header if not already there
-    if (!document.getElementById('btnImport')) {
-      const btn = document.createElement('button');
-      btn.id = 'btnImport';
-      btn.textContent = '📋 Import List';
-      btn.style.cssText = 'display:block;width:100%;margin-top:6px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.3px;';
-      btn.addEventListener('click', openImportModal);
-      document.querySelector('.filter-btns').after(btn);
-    }
-    // Show seed button if not already there
-    if (!document.getElementById('btnSeedDb')) {
-      const btn = document.createElement('button');
-      btn.id = 'btnSeedDb';
-      btn.textContent = '🌱 Seed Database from JSON';
-      btn.style.cssText = 'display:block;width:100%;margin-top:4px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.3px;';
-      btn.addEventListener('click', manualSeed);
-      document.getElementById('btnImport').after(btn);
-    }
+    document.getElementById('adminBar').style.display = 'flex';
+    document.getElementById('btnAdminLogin').style.display = 'none';
+  }
+
+  function hideAdminControls() {
+    fabAdd.style.display = 'none';
+    document.getElementById('adminBar').style.display = 'none';
+    document.getElementById('btnAdminLogin').style.display = 'block';
   }
 
   async function manualSeed() {
@@ -689,15 +679,18 @@ let isAdmin = false;
     if (e.target === importModal) closeImportModal();
   });
 
-  let adminPressTimer = null;
-  function startAdminPress() { adminPressTimer = setTimeout(promptAdminLogin, 1500); }
-  function cancelAdminPress() { clearTimeout(adminPressTimer); }
-  countBar.addEventListener('touchstart', startAdminPress);
-  countBar.addEventListener('touchend',   cancelAdminPress);
-  countBar.addEventListener('touchcancel',cancelAdminPress);
-  countBar.addEventListener('mousedown',  startAdminPress);
-  countBar.addEventListener('mouseup',    cancelAdminPress);
-  countBar.addEventListener('mouseleave', cancelAdminPress);
+  function adminLogout() {
+    isAdmin = false;
+    localStorage.removeItem('ups_admin');
+    hideAdminControls();
+    const drivers = Array.from(driverMap.values());
+    renderCards(drivers);
+  }
+
+  document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
+  document.getElementById('btnAdminLogout').addEventListener('click', adminLogout);
+  document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
+  document.getElementById('btnImport').addEventListener('click', openImportModal);
 
   // ── Event listeners ──────────────────────────────────────────
   searchBox.addEventListener('input',  applyFilter);
