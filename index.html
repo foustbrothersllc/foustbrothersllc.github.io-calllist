@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="UPS Driver click-to-call directory">
+  <title>UPS Driver Call List</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- UPS Shield Watermark -->
+  <div class="ups-watermark" aria-hidden="true">
+    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+      <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z"/>
+    </svg>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Sticky header
+       ══════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-top">
+      <div class="ups-logo-small" aria-hidden="true">
+        <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z" fill="#351C15"/>
+          <text x="100" y="148" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="72" fill="#FFB500">UPS</text>
+        </svg>
+      </div>
+      <div class="header-title">
+        <h1>Driver Call List</h1>
+        <span class="header-sub">Click-to-Call Directory</span>
+      </div>
+    </div>
+
+    <div class="search-row">
+      <input
+        type="search"
+        id="searchBox"
+        placeholder="Search by name or number…"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        aria-label="Search drivers"
+        inputmode="search"
+      >
+    </div>
+
+    <div class="filter-btns" role="group" aria-label="Filter by location">
+      <button class="filter-btn active" data-loc="all">All</button>
+      <button class="filter-btn" data-loc="greensboro">GRENC</button>
+      <button class="filter-btn" data-loc="mebane">MEBNC</button>
+    </div>
+
+    <p class="count-bar" id="countBar" aria-live="polite"></p>
+  </header>
+
+  <!-- ══════════════════════════════════════════════
+       Add / Edit Driver Panel
+       ══════════════════════════════════════════════ -->
+  <div class="add-panel" id="addPanel">
+    <div class="add-panel-header">
+      <span id="addPanelTitle">Add Driver</span>
+      <button class="panel-close-btn" id="panelCloseBtn" aria-label="Close panel">✕</button>
+    </div>
+    <div class="add-panel-body">
+      <div class="field-row">
+        <div class="field-group">
+          <label for="inputLastName">Last Name</label>
+          <input type="text" id="inputLastName" placeholder="Last name" autocapitalize="words">
+        </div>
+        <div class="field-group">
+          <label for="inputFirstName">First Name</label>
+          <input type="text" id="inputFirstName" placeholder="First name" autocapitalize="words">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="inputLocation">Location (SLIC)</label>
+          <select id="inputLocation">
+            <option value="Greensboro">GRENC</option>
+            <option value="Mebane">MEBNC</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="inputPhone">Primary Phone</label>
+          <input type="tel" id="inputPhone" placeholder="Any format — auto-normalized">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label for="inputAltPhone">Alt Phone <span class="optional">(optional)</span></label>
+          <input type="tel" id="inputAltPhone" placeholder="Any format — auto-normalized">
+        </div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn-cancel" id="btnCancel">Cancel</button>
+        <button class="btn-save" id="btnSave">Save Driver</button>
+      </div>
+      <p class="panel-note" id="panelNote"></p>
+    </div>
+  </div>
+  <div class="panel-overlay" id="panelOverlay"></div>
+
+  <!-- ══════════════════════════════════════════════
+       Delete Confirmation Modal
+       ══════════════════════════════════════════════ -->
+  <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal">
+      <div class="modal-icon">⚠️</div>
+      <h2 class="modal-title" id="deleteModalTitle">Delete Driver?</h2>
+      <p class="modal-body" id="deleteModalBody">This will permanently remove this driver from the list.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="deleteCancel">Keep</button>
+        <button class="btn-delete-confirm" id="deleteConfirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       FAB: Add Driver
+       ══════════════════════════════════════════════ -->
+  <button class="fab" id="fabAdd" aria-label="Add driver">
+    <span>+</span>
+  </button>
+
+  <!-- ══════════════════════════════════════════════
+       Card list — populated dynamically by app.js
+       ══════════════════════════════════════════════ -->
+  <main class="list" id="cardList">
+    <div id="noResults" role="status">No drivers found matching your search.</div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
