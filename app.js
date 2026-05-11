@@ -10,77 +10,27 @@
    - Password-protected edits; everyone can view
    ============================================================ */
 
-// ── Firestore REST API ───────────────────────────────────────
-const PROJECT_ID  = 'call-list-editer';
-const API_KEY     = 'AIzaSyDVgCrg8HyEgOLEN0f3A9L4LcqWhOqMX_g';
-const FS_BASE     = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/default/documents/drivers';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc,
+  setDoc, deleteDoc, getDocs, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-function toFirestoreDoc(driver) {
-  function toVal(v) {
-    if (v === null || v === undefined) return { nullValue: null };
-    if (typeof v === 'string')  return { stringValue: v };
-    if (typeof v === 'boolean') return { booleanValue: v };
-    if (typeof v === 'number')  return { integerValue: String(v) };
-    if (typeof v === 'object') {
-      const fields = {};
-      for (const k in v) fields[k] = toVal(v[k]);
-      return { mapValue: { fields } };
-    }
-    return { stringValue: String(v) };
-  }
-  const fields = {};
-  for (const k in driver) fields[k] = toVal(driver[k]);
-  return { fields };
-}
+const firebaseConfig = {
+  apiKey:            "AIzaSyDVgCrg8HyEgOLEN0f3A9L4LcqWhOqMX_g",
+  authDomain:        "call-list-editer.firebaseapp.com",
+  projectId:         "call-list-editer",
+  storageBucket:     "call-list-editer.firebasestorage.app",
+  messagingSenderId: "321715928634",
+  appId:             "1:321715928634:web:758162c068fe8ebaf17f03",
+  measurementId:     "G-2T1NB1Y7N5"
+};
 
-function fromFirestoreDoc(doc) {
-  function fromVal(v) {
-    if (v.nullValue !== undefined) return null;
-    if (v.stringValue  !== undefined) return v.stringValue;
-    if (v.booleanValue !== undefined) return v.booleanValue;
-    if (v.integerValue !== undefined) return Number(v.integerValue);
-    if (v.doubleValue  !== undefined) return v.doubleValue;
-    if (v.mapValue     !== undefined) {
-      const obj = {};
-      for (const k in v.mapValue.fields) obj[k] = fromVal(v.mapValue.fields[k]);
-      return obj;
-    }
-    return null;
-  }
-  const obj = {};
-  for (const k in doc.fields) obj[k] = fromVal(doc.fields[k]);
-  return obj;
-}
-
-async function fsGet() {
-  const docs = [];
-  let pageToken = null;
-  do {
-    let url = FS_BASE + '?key=' + API_KEY + '&pageSize=300';
-    if (pageToken) url += '&pageToken=' + pageToken;
-    const r = await fetch(url);
-    const data = await r.json();
-    if (data.documents) data.documents.forEach(d => docs.push(fromFirestoreDoc(d)));
-    pageToken = data.nextPageToken || null;
-  } while (pageToken);
-  return docs;
-}
-
-async function fsSet(docId, driver) {
-  const url = FS_BASE + '/' + docId + '?key=' + API_KEY;
-  const r = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(toFirestoreDoc(driver))
-  });
-  if (!r.ok) throw new Error('fsSet failed: ' + r.status);
-}
-
-async function fsDelete(docId) {
-  const url = FS_BASE + '/' + docId + '?key=' + API_KEY;
-  const r = await fetch(url, { method: 'DELETE' });
-  if (!r.ok) throw new Error('fsDelete failed: ' + r.status);
-}
+const firebaseApp = initializeApp(firebaseConfig);
+const auth        = getAuth(firebaseApp);
+const db          = getFirestore(firebaseApp);
+const driversCol  = collection(db, 'drivers');
 
 // ── Admin password — change this to whatever you want ────────
 const ADMIN_PASSWORD = 'UPS1907';
@@ -385,7 +335,7 @@ let isAdmin = false;
       setTimeout(function() { el.remove(); }, 310);
       allCards = allCards.filter(function(c) { return c !== el; });
     }
-    fsDelete(keyToDocId(key)).catch(console.error);
+    deleteDoc(doc(db, 'drivers', keyToDocId(key))).catch(console.error);
     applyFilter();
   }
 
@@ -438,7 +388,7 @@ let isAdmin = false;
       }
     }
 
-    fsSet(keyToDocId(key), driver).catch(console.error);
+    setDoc(doc(db, 'drivers', keyToDocId(key)), driver).catch(console.error);
     applyFilter();
   }
 
@@ -551,7 +501,7 @@ let isAdmin = false;
       const oldOuter = listEl.querySelector('.card-outer[data-key="' + editingKey + '"]');
       driverSet.delete(editingKey);
       driverMap.delete(editingKey);
-      fsDelete(keyToDocId(editingKey)).catch(console.error);
+      deleteDoc(doc(db, 'drivers', keyToDocId(editingKey))).catch(console.error);
       if (oldOuter) {
         allCards = allCards.filter(function(c) { return c !== oldOuter; });
         oldOuter.remove();
@@ -602,7 +552,7 @@ let isAdmin = false;
         console.log('Seed: writing batch', i, 'to', i + batch.length);
         await Promise.all(batch.map(function(driver) {
           const key = driverKey(driver.lastName, driver.firstName);
-          return fsSet(keyToDocId(key), driver);
+          return setDoc(doc(db, 'drivers', keyToDocId(key)), driver);
         }));
         done += batch.length;
         btn.textContent = '⏳ ' + done + '/' + total;
@@ -679,9 +629,9 @@ let isAdmin = false;
     });
 
     importStatus.textContent = 'Comparing with existing list…';
-    let existingDocs;
+    let snapshot;
     try {
-      existingDocs = await fsGet();
+      snapshot = await getDocs(driversCol);
     } catch(e) {
       importStatus.textContent = '❌ Failed to read database: ' + e.message;
       importConfirm.disabled = false;
@@ -690,9 +640,8 @@ let isAdmin = false;
     }
 
     const toDelete = [];
-    existingDocs.forEach(function(d) {
-      const key = driverKey(d.lastName, d.firstName);
-      if (!incomingMap.has(keyToDocId(key))) toDelete.push(keyToDocId(key));
+    snapshot.forEach(function(d) {
+      if (!incomingMap.has(d.id)) toDelete.push(d.id);
     });
 
     const total   = incomingMap.size;
@@ -707,7 +656,7 @@ let isAdmin = false;
       for (let i = 0; i < entries.length; i += 20) {
         const batch = entries.slice(i, i + 20);
         await Promise.all(batch.map(function([id, driver]) {
-          return fsSet(id, driver);
+          return setDoc(doc(db, 'drivers', id), driver);
         }));
         done += batch.length;
         importStatus.textContent = 'Uploading… ' + done + ' / ' + total;
@@ -717,7 +666,7 @@ let isAdmin = false;
       if (toDelete.length > 0) {
         importStatus.textContent = 'Removing ' + removed + ' old drivers…';
         await Promise.all(toDelete.map(function(id) {
-          return fsDelete(id);
+          return deleteDoc(doc(db, 'drivers', id));
         }));
       }
 
@@ -786,19 +735,27 @@ let isAdmin = false;
     if (el) el.remove();
   }
 
-  fsGet().then(function(drivers) {
-    removeLoadingMsg();
-    drivers.sort(function(a, b) {
-      const ka = (a.lastName + a.firstName).toLowerCase();
-      const kb = (b.lastName + b.firstName).toLowerCase();
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
+  // Sign in anonymously first so Firestore auth works, then load
+  signInAnonymously(auth).then(function() {
+    return onSnapshot(driversCol, function(snapshot) {
+      removeLoadingMsg();
+      const drivers = [];
+      snapshot.forEach(function(d) { drivers.push(d.data()); });
+      drivers.sort(function(a, b) {
+        const ka = (a.lastName + a.firstName).toLowerCase();
+        const kb = (b.lastName + b.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      renderCards(drivers);
+    }, function(err) {
+      removeLoadingMsg();
+      console.error('Snapshot error:', err);
     });
-    renderCards(drivers);
   }).catch(function(err) {
     removeLoadingMsg();
     const p = document.createElement('p');
     p.style.cssText = 'padding:24px;color:#b91c1c;';
-    p.textContent = 'Error loading drivers: ' + err.message;
+    p.textContent = 'Error signing in: ' + err.message;
     listEl.insertBefore(p, noResults);
     console.error(err);
   });
