@@ -542,13 +542,11 @@ let isAdmin = false;
       bar.id = 'bulkDeleteBar';
       bar.style.cssText = 'display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#351C15;color:#FFB500;border-radius:40px;padding:10px 18px;gap:12px;align-items:center;box-shadow:0 4px 18px rgba(53,28,21,0.35);font-size:14px;font-weight:700;white-space:nowrap;';
       bar.innerHTML = '<span id="bulkDeleteCount">0 selected</span>'
-        + '<button onclick="window.__selectAll()" style="background:rgba(255,181,0,0.15);border:1.5px solid rgba(255,181,0,0.5);color:#FFB500;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">Select All</button>'
         + '<button onclick="window.__clearSel()" style="background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.8);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">Clear</button>'
         + '<button onclick="window.__bulkDel()" style="background:#b91c1c;border:none;color:#fff;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:800;cursor:pointer;">🗑 Delete</button>';
       document.body.appendChild(bar);
       window.__bulkDel   = confirmBulkDelete;
       window.__clearSel  = clearAllSelections;
-      window.__selectAll = selectAllVisible;
     }
   }
 
