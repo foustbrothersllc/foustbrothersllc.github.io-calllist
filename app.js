@@ -906,7 +906,7 @@ function initApp() {
     document.getElementById('btnAdminLogin').style.display = 'none';
 
     // Inject write counter bar if not already present
-    if (!document.getElementById('writeCountBar')) {
+    if (false && !document.getElementById('writeCountBar')) {
       const wb = document.createElement('div');
       wb.id = 'writeCountBar';
       wb.style.cssText = 'display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.25);border-radius:8px;padding:8px 12px;margin-top:4px;';
