@@ -956,63 +956,137 @@ function initApp() {
 
   // ── PDF text extraction via pdf.js ───────────────────────────
   async function extractTextFromPdf(file) {
-    // pdf.js must be loaded as module from CDN; access via globalThis.pdfjsLib
     const pdfjsLib = globalThis.pdfjsLib || (await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs'));
     if (pdfjsLib.GlobalWorkerOptions) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
     }
-    const buffer  = await file.arrayBuffer();
-    const pdfDoc  = await pdfjsLib.getDocument({ data: buffer }).promise;
-    let fullText  = '';
+    const buffer = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+    // Extract items with position data so we can reconstruct rows properly
+    const allPageItems = [];
     for (let p = 1; p <= pdfDoc.numPages; p++) {
       const page    = await pdfDoc.getPage(p);
       const content = await page.getTextContent();
-      fullText += content.items.map(i => i.str).join(' ') + '\n';
+      const vp      = page.getViewport({ scale: 1 });
+      // Normalise y to top-down, attach page number
+      content.items.forEach(function(item) {
+        allPageItems.push({
+          str:  item.str.trim(),
+          x:    item.transform[4],
+          y:    vp.height - item.transform[5],
+          page: p
+        });
+      });
     }
-    return fullText;
+    return allPageItems;
   }
 
-  // ── Parse PDF text into driver objects ───────────────────────
-  // Expects lines with: LastName, FirstName [Location] PhoneNum [AltPhone]
-  // or tab/comma delimited rows
-  function parsePdfText(text) {
-    const drivers = [];
-    const phoneRE = /\b(\+?1[-.\s]?)?(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})\b/g;
-    const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+  // ── Parse PDF items into driver objects ───────────────────────
+  // Handles your specific 3-column format:
+  // LASTNAME, FIRSTNAME   (phone)   (altphone)
+  // Location sections detected by header text
+  function parsePdfText(items) {
+    const phoneRE = /^[\d()+\-.\s]{7,}$/;
+    const nameRE  = /^[A-Z][A-Z\s,.''\-()+]+$/;
 
-    for (const line of lines) {
-      const phones = [...line.matchAll(phoneRE)].map(m => normalisePhone(m[0])).filter(Boolean);
-      if (phones.length === 0) continue;
+    // Skip header/footer garbage
+    const SKIP = /^(driver\s*name|home\s*phone|alternative|click\s*any|feeder\s*drivers|driver\s*phone\s*directory|page\s*\d|greensboro|mebane)$/i;
 
-      // Try to extract name: assume "LastName, FirstName" or "FirstName LastName"
-      const namePart = line.replace(phoneRE, '').replace(/GSO|GRENC|MEB|MEBNC/gi, '').trim();
-      let lastName = '', firstName = '';
-      if (namePart.includes(',')) {
-        const parts = namePart.split(',').map(s => s.trim());
-        lastName  = parts[0] || '';
-        firstName = parts[1] || '';
-      } else {
-        const parts = namePart.split(/\s+/);
-        lastName  = parts[parts.length - 1] || '';
-        firstName = parts.slice(0, -1).join(' ') || '';
+    // Group items into rows by proximity of y coordinate (within 6px = same row)
+    const rows = [];
+    const sorted = [...items].sort(function(a, b) {
+      if (a.page !== b.page) return a.page - b.page;
+      if (Math.abs(a.y - b.y) > 6) return a.y - b.y;
+      return a.x - b.x;
+    });
+
+    let currentRow = null;
+    for (const item of sorted) {
+      if (!item.str) continue;
+      if (!currentRow || item.page !== currentRow.page || Math.abs(item.y - currentRow.y) > 6) {
+        currentRow = { y: item.y, page: item.page, items: [] };
+        rows.push(currentRow);
       }
-      lastName  = lastName.replace(/[^a-zA-Z'-]/g, '').trim();
-      firstName = firstName.replace(/[^a-zA-Z'-]/g, '').trim();
+      currentRow.items.push(item);
+    }
+
+    // Detect location from section headers
+    let currentLocation = 'Greensboro';
+    const drivers = [];
+
+    for (const row of rows) {
+      const text = row.items.map(i => i.str).join(' ').trim();
+
+      // Location header detection
+      if (/greensboro\s*feeder/i.test(text)) { currentLocation = 'Greensboro'; continue; }
+      if (/mebane\s*feeder/i.test(text))     { currentLocation = 'Mebane';     continue; }
+
+      // Skip known header/footer rows
+      if (SKIP.test(text.trim())) continue;
+      if (/driver\s*name/i.test(text))       continue;
+
+      // Extract all phone numbers from this row
+      const phones = [];
+      const nameTokens = [];
+
+      for (const item of row.items) {
+        const s = item.str.trim();
+        if (!s) continue;
+        const digits = normalisePhone(s);
+        if (digits) {
+          phones.push(digits);
+        } else if (!SKIP.test(s) && !/^(E|C|H|2nd|WI|calling\s*back|CALLING\s*BACK)$/i.test(s)) {
+          nameTokens.push(s);
+        }
+      }
+
+      // Must have at least a name token
+      if (nameTokens.length === 0) continue;
+
+      const nameStr = nameTokens.join(' ').trim();
+
+      // Must look like a name (contains a letter, not pure header)
+      if (!/[A-Za-z]/.test(nameStr)) continue;
+      if (/^(driver|home|alternative|click|directory)$/i.test(nameStr)) continue;
+
+      // Parse LASTNAME, FIRSTNAME format
+      let lastName = '', firstName = '';
+      if (nameStr.includes(',')) {
+        const comma = nameStr.indexOf(',');
+        lastName  = nameStr.slice(0, comma).trim();
+        firstName = nameStr.slice(comma + 1).trim();
+      } else {
+        // Space-separated: last word is last name
+        const parts = nameStr.split(/\s+/);
+        lastName  = parts[parts.length - 1];
+        firstName = parts.slice(0, -1).join(' ');
+      }
+
+      // Clean up — remove parenthetical nicknames from firstName if needed
+      firstName = firstName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+      lastName  = lastName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+
+      // Must have both parts
       if (!lastName || !firstName) continue;
 
-      // Detect location
-      let location = 'Greensboro';
-      if (/MEB|MEBNC/i.test(line)) location = 'Mebane';
+      // Skip if name looks like a header
+      if (/^(driver|name|home|phone|alternative)$/i.test(lastName)) continue;
 
       drivers.push({
-        lastName, firstName,
-        location,
+        lastName:  toTitleCase(lastName),
+        firstName: toTitleCase(firstName),
+        location:  currentLocation,
         phone:    phones[0] ? { digits: phones[0], display: formatPhone(phones[0]) } : null,
         altPhone: phones[1] ? { digits: phones[1], display: formatPhone(phones[1]) } : null,
         photo:    null
       });
     }
     return drivers;
+  }
+
+  function toTitleCase(str) {
+    return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   }
 
   // ── Scan for duplicates (by name, not number) ────────────────
