@@ -125,24 +125,7 @@ body {
   -webkit-user-select: none;
 }
 
-/* Red delete zone revealed behind card */
-.card-delete-bg {
-  position: absolute;
-  inset: 0;
-  background: var(--danger);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 22px;
-  border-radius: var(--radius);
-  color: var(--white);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  gap: 6px;
-}
-
-/* The actual white card that slides */
+/* The actual white card */
 .card {
   background: var(--white);
   border-radius: var(--radius);
@@ -150,11 +133,6 @@ body {
   box-shadow: var(--shadow);
   border-left: 3px solid var(--gold);
   position: relative;
-  /* slide transform applied by JS */
-  transform: translateX(0);
-  transition: transform 0.05s linear;
-  will-change: transform;
-  touch-action: pan-y; /* allow vertical scroll, intercept horizontal */
 }
 
 /* Photo avatar on card */
@@ -257,6 +235,25 @@ body {
   cursor: pointer;
 }
 .btn-edit:active { filter: brightness(0.88); }
+
+/* ── Multi-select checkbox ── */
+.card-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  accent-color: var(--brown);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.card-selected .card {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+}
+.card-selected .card .name {
+  color: var(--danger);
+}
 
 #noResults { display: none; text-align: center; padding: 48px 20px; color: var(--muted); font-size: 16px; }
 

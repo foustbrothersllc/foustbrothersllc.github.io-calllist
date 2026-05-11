@@ -83,6 +83,8 @@ let isAdmin = false;
   let editingKey          = null;
   let pendingDeleteKey    = null;
   let currentPhotoDataUrl = null;
+  const selectedKeys      = new Set();
+  let selectModeActive    = false;
 
   // ── SLIC labels ──────────────────────────────────────────────
   const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC' };
@@ -156,11 +158,6 @@ let isAdmin = false;
     outer.className = 'card-outer';
     outer.dataset.key = key;
 
-    const deleteBg = document.createElement('div');
-    deleteBg.className = 'card-delete-bg';
-    deleteBg.innerHTML = '<span style="font-size:20px">🗑</span><span>DELETE</span>';
-    outer.appendChild(deleteBg);
-
     const card = document.createElement('div');
     card.className = 'card';
 
@@ -169,9 +166,31 @@ let isAdmin = false;
     outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt, slicLabel(driver.location), driver.location].join(' ').toLowerCase();
     outer.dataset.location = (driver.location || '').toLowerCase();
 
-    // Header: avatar + name + badge
+    // Header: checkbox (admin select mode) + avatar + name + badge
     const header = document.createElement('div');
     header.className = 'card-header';
+
+    if (isAdmin) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'card-checkbox';
+      cb.checked = selectedKeys.has(key);
+      cb.setAttribute('aria-label', 'Select ' + driver.lastName + ' ' + driver.firstName);
+      cb.addEventListener('change', function(e) {
+        e.stopPropagation();
+        if (cb.checked) {
+          selectedKeys.add(key);
+          outer.classList.add('card-selected');
+        } else {
+          selectedKeys.delete(key);
+          outer.classList.remove('card-selected');
+        }
+        updateBulkBar();
+      });
+      header.appendChild(cb);
+      if (selectedKeys.has(key)) outer.classList.add('card-selected');
+    }
+
     if (driver.photo) {
       const img = document.createElement('img');
       img.src = driver.photo;
@@ -225,89 +244,74 @@ let isAdmin = false;
     }
 
     outer.appendChild(card);
-
-    // Swipe-to-delete — admin only
-    if (isAdmin) attachSwipe(outer, card, key);
-
     return outer;
   }
 
-  // ── Swipe logic ──────────────────────────────────────────────
-  function attachSwipe(outer, card, key) {
-    let startX = 0, startY = 0, currentX = 0;
-    let swiping = false, locked = false, dirLocked = false;
-    const THRESHOLD = 0.85;
-
-    function onStart(e) {
-      if (locked) return;
-      const touch = e.touches ? e.touches[0] : e;
-      startX = touch.clientX; startY = touch.clientY;
-      currentX = 0; swiping = true; dirLocked = false;
-      card.style.transition = 'none';
+  // ── Bulk delete bar ──────────────────────────────────────────
+  function updateBulkBar() {
+    const bar = document.getElementById('bulkDeleteBar');
+    if (!bar) return;
+    const count = selectedKeys.size;
+    if (count > 0) {
+      bar.style.display = 'flex';
+      document.getElementById('bulkDeleteCount').textContent = count + ' selected';
+    } else {
+      bar.style.display = 'none';
     }
-    function onMove(e) {
-      if (!swiping || locked) return;
-      const touch = e.touches ? e.touches[0] : e;
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
-      if (!dirLocked && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-        dirLocked = true;
-        if (Math.abs(dy) > Math.abs(dx)) { swiping = false; return; }
-      }
-      if (!dirLocked) return;
-      currentX = Math.min(0, dx);
-      card.style.transform = 'translateX(' + currentX + 'px)';
-      if (e.cancelable) e.preventDefault();
-    }
-    function onEnd() {
-      if (!swiping || locked) return;
-      swiping = false;
-      const cardWidth = card.offsetWidth;
-      if (Math.abs(currentX) >= cardWidth * THRESHOLD) {
-        card.style.transition = 'transform 0.22s ease-in';
-        card.style.transform  = 'translateX(-' + cardWidth + 'px)';
-        locked = true;
-        setTimeout(function () { openDeleteModal(key, outer, card); }, 220);
-      } else {
-        card.style.transition = 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)';
-        card.style.transform  = 'translateX(0)';
-      }
-    }
-
-    card.addEventListener('touchstart', onStart, { passive: true });
-    card.addEventListener('touchmove',  onMove,  { passive: false });
-    card.addEventListener('touchend',   onEnd,   { passive: true });
-    card.addEventListener('mousedown', function(e) {
-      onStart(e);
-      function mm(ev) { onMove(ev); }
-      function mu()   { onEnd(); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); }
-      document.addEventListener('mousemove', mm);
-      document.addEventListener('mouseup',   mu);
-    });
   }
 
-  // ── Delete modal ─────────────────────────────────────────────
-  function openDeleteModal(key, outer, card) {
-    const driver = driverMap.get(key);
-    if (!driver) return;
-    pendingDeleteKey = key;
-    deleteBody.textContent = 'Remove ' + driver.lastName + ', ' + driver.firstName + ' from the list? This cannot be undone.';
+  function clearAllSelections() {
+    selectedKeys.clear();
+    document.querySelectorAll('.card-checkbox').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.card-selected').forEach(function(el) { el.classList.remove('card-selected'); });
+    updateBulkBar();
+  }
+
+  function selectAllVisible() {
+    allCards.forEach(function(outer) {
+      if (outer.style.display === 'none') return;
+      const key = outer.dataset.key;
+      selectedKeys.add(key);
+      outer.classList.add('card-selected');
+      const cb = outer.querySelector('.card-checkbox');
+      if (cb) cb.checked = true;
+    });
+    updateBulkBar();
+  }
+
+  function confirmBulkDelete() {
+    if (selectedKeys.size === 0) return;
+    const count = selectedKeys.size;
+    deleteBody.textContent = 'Permanently delete ' + count + ' driver' + (count > 1 ? 's' : '') + '? This cannot be undone.';
     deleteModal.classList.add('open');
 
-    function onCancel() {
-      card.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
-      card.style.transform  = 'translateX(0)';
-      const newOuter = buildCard(driver);
-      outer.replaceWith(newOuter);
-      const idx = allCards.indexOf(outer);
-      if (idx !== -1) allCards[idx] = newOuter;
-      pendingDeleteKey = null;
+    function onConfirm() {
+      const keys = Array.from(selectedKeys);
+      keys.forEach(function(key) {
+        const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+        driverSet.delete(key);
+        driverMap.delete(key);
+        if (outer) {
+          outer.style.transition = 'max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease';
+          outer.style.maxHeight  = outer.offsetHeight + 'px';
+          outer.style.overflow   = 'hidden';
+          requestAnimationFrame(function() {
+            outer.style.maxHeight    = '0';
+            outer.style.opacity      = '0';
+            outer.style.marginBottom = '0';
+          });
+          setTimeout(function() { outer.remove(); }, 310);
+          allCards = allCards.filter(function(c) { return c !== outer; });
+        }
+        deleteDoc(doc(db, 'drivers', keyToDocId(key))).catch(console.error);
+      });
+      selectedKeys.clear();
+      updateBulkBar();
+      applyFilter();
       deleteModal.classList.remove('open');
       cleanup();
     }
-    function onConfirm() {
-      deleteDriver(key, outer);
-      pendingDeleteKey = null;
+    function onCancel() {
       deleteModal.classList.remove('open');
       cleanup();
     }
@@ -532,12 +536,29 @@ let isAdmin = false;
     fabAdd.style.display = 'flex';
     document.getElementById('adminBar').style.display = 'flex';
     document.getElementById('btnAdminLogin').style.display = 'none';
+
+    if (!document.getElementById('bulkDeleteBar')) {
+      const bar = document.createElement('div');
+      bar.id = 'bulkDeleteBar';
+      bar.style.cssText = 'display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;background:#351C15;color:#FFB500;border-radius:40px;padding:10px 18px;gap:12px;align-items:center;box-shadow:0 4px 18px rgba(53,28,21,0.35);font-size:14px;font-weight:700;white-space:nowrap;';
+      bar.innerHTML = '<span id="bulkDeleteCount">0 selected</span>'
+        + '<button onclick="window.__selectAll()" style="background:rgba(255,181,0,0.15);border:1.5px solid rgba(255,181,0,0.5);color:#FFB500;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">Select All</button>'
+        + '<button onclick="window.__clearSel()" style="background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.8);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">Clear</button>'
+        + '<button onclick="window.__bulkDel()" style="background:#b91c1c;border:none;color:#fff;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:800;cursor:pointer;">🗑 Delete</button>';
+      document.body.appendChild(bar);
+      window.__bulkDel   = confirmBulkDelete;
+      window.__clearSel  = clearAllSelections;
+      window.__selectAll = selectAllVisible;
+    }
   }
 
   function hideAdminControls() {
     fabAdd.style.display = 'none';
     document.getElementById('adminBar').style.display = 'none';
     document.getElementById('btnAdminLogin').style.display = 'block';
+    clearAllSelections();
+    const bar = document.getElementById('bulkDeleteBar');
+    if (bar) bar.style.display = 'none';
   }
 
   async function manualSeed() {
