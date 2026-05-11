@@ -153,8 +153,8 @@ let isAdmin = false;
   const SESSION_TOKEN_KEY = 'dcl_session_v2';
   const BIO_CRED_KEY      = 'dcl_bio_cred';
 
-  // Check if already authenticated
-  if (sessionStorage.getItem(SESSION_TOKEN_KEY) === 'granted') {
+  // If previously authenticated via password OR biometrics, unlock immediately
+  if (localStorage.getItem(SESSION_TOKEN_KEY) === 'granted') {
     unlockApp();
     return;
   }
@@ -179,7 +179,7 @@ let isAdmin = false;
 
   function tryAccessKey() {
     if (keyInput.value === ACCESS_KEY) {
-      sessionStorage.setItem(SESSION_TOKEN_KEY, 'granted');
+      localStorage.setItem(SESSION_TOKEN_KEY, 'granted');
       // Offer to register biometrics if supported
       if (window.PublicKeyCredential && !localStorage.getItem(BIO_CRED_KEY)) {
         tryRegisterBiometric();
@@ -235,7 +235,7 @@ let isAdmin = false;
         }
       });
       if (assertion) {
-        sessionStorage.setItem(SESSION_TOKEN_KEY, 'granted');
+        localStorage.setItem(SESSION_TOKEN_KEY, 'granted');
         unlockApp();
       }
     } catch (e) {
