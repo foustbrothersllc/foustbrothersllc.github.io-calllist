@@ -14,7 +14,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFirestore, collection, doc,
-  setDoc, deleteDoc, getDocs, onSnapshot
+  setDoc, deleteDoc, getDocs, onSnapshot,
+  initializeFirestore, CACHE_SIZE_UNLIMITED
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,7 +30,10 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth        = getAuth(firebaseApp);
-const db          = getFirestore(firebaseApp);
+const db          = initializeFirestore(firebaseApp, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false
+});
 const driversCol  = collection(db, 'drivers');
 
 // ── Admin password — change this to whatever you want ────────
