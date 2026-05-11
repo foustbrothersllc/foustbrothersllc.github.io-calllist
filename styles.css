@@ -1,5 +1,5 @@
 /* ============================================================
-   UPS Driver Call List — styles.css
+   Driver Call List — styles.css
    ============================================================ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,8 +38,99 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Access Gate ── */
+.access-gate {
+  position: fixed;
+  inset: 0;
+  background: var(--brown);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.gate-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 36px 28px 32px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+  text-align: center;
+  border-top: 4px solid var(--gold);
+}
+.gate-icon { font-size: 40px; margin-bottom: 12px; }
+.gate-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--brown);
+  margin-bottom: 4px;
+}
+.gate-sub {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 22px;
+}
+.gate-field-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.gate-input {
+  flex: 1;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  font-size: 15px;
+  outline: none;
+  color: var(--text);
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+.gate-input:focus { border-color: var(--gold); }
+.gate-btn {
+  padding: 11px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--brown);
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.1s;
+}
+.gate-btn:active { filter: brightness(1.2); }
+.gate-bio-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--brown-light);
+  color: var(--brown);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  transition: background 0.15s;
+}
+.gate-bio-btn:active { background: var(--border); }
+.bio-icon { font-size: 20px; }
+.gate-error {
+  font-size: 13px;
+  color: var(--danger);
+  min-height: 18px;
+  font-weight: 600;
+}
+
 /* ── Watermark ── */
-.ups-watermark {
+.watermark {
   position: fixed;
   bottom: -60px; right: -60px;
   width: 380px; height: 380px;
@@ -47,7 +138,7 @@ body {
   z-index: 0;
   opacity: 0.055;
 }
-.ups-watermark svg { width: 100%; height: 100%; fill: var(--brown); }
+.watermark svg { width: 100%; height: 100%; fill: var(--brown); }
 
 /* ── Header ── */
 .header {
@@ -60,10 +151,39 @@ body {
   border-bottom: 3px solid var(--gold);
 }
 .header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 11px; }
-.ups-logo-small { width: 42px; height: 50px; flex-shrink: 0; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35)); }
-.ups-logo-small svg { width: 100%; height: 100%; }
+.header-title { flex: 1; }
 .header-title h1 { font-size: 17px; font-weight: 800; color: var(--gold); line-height: 1.1; }
 .header-sub { font-size: 11px; color: rgba(255,255,255,0.55); font-weight: 400; letter-spacing: 0.4px; text-transform: uppercase; }
+
+.btn-header-icon {
+  background: none;
+  border: 1.5px solid rgba(255,181,0,0.4);
+  color: rgba(255,255,255,0.7);
+  font-size: 16px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.btn-header-icon:active { background: rgba(255,255,255,0.1); }
+
+.btn-admin {
+  flex: 1;
+  padding: 7px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255,181,0,0.5);
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-admin-danger {
+  border-color: rgba(255,100,100,0.5);
+  color: rgba(255,150,150,0.85);
+}
 
 #searchBox {
   width: 100%;
@@ -120,7 +240,6 @@ body {
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
-  /* prevent text selection during swipe */
   user-select: none;
   -webkit-user-select: none;
 }
@@ -184,11 +303,23 @@ body {
 .loc-greensboro { background: var(--grenc-bg); color: var(--grenc-fg); }
 .loc-mebane     { background: var(--mebnc-bg); color: var(--mebnc-fg); }
 
-/* ── Phone buttons: side by side ── */
+/* ── Phone buttons row ── */
 .phones {
   display: flex;
   gap: 6px;
-  flex-wrap: nowrap;
+  flex-direction: column;
+}
+.phone-group {
+  display: flex;
+  gap: 6px;
+}
+.phone-group-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
 }
 
 .phone-btn {
@@ -205,10 +336,14 @@ body {
   transition: filter 0.1s, transform 0.1s;
   text-align: center;
   min-width: 0;
+  border: none;
+  cursor: pointer;
 }
 .phone-btn:active { filter: brightness(0.88); transform: scale(0.97); }
-.phone-btn.primary { background: var(--gold); color: var(--brown-dark); }
-.phone-btn.alt     { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
+.phone-btn.call-primary { background: var(--gold); color: var(--brown-dark); }
+.phone-btn.text-primary { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
+.phone-btn.call-alt  { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
+.phone-btn.text-alt  { background: var(--bg); color: var(--brown-mid); border: 1px solid var(--border); }
 
 .phone-icon  { font-size: 13px; flex-shrink: 0; }
 .phone-number { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

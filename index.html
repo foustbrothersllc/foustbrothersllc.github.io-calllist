@@ -3,166 +3,226 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="UPS Driver click-to-call directory">
-  <title>UPS Driver Call List</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Driver click-to-call directory">
+  <title>Driver Call List</title>
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <!-- UPS Shield Watermark -->
-  <div class="ups-watermark" aria-hidden="true">
-    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-      <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z"/>
-    </svg>
-  </div>
-
-  <header class="header">
-    <div class="header-top">
-      <div class="ups-logo-small" aria-hidden="true">
-        <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-          <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z" fill="#351C15"/>
-          <text x="100" y="148" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="72" fill="#FFB500">UPS</text>
-        </svg>
+  <!-- ── Access Key Gate ── -->
+  <div id="accessGate" class="access-gate">
+    <div class="gate-card">
+      <div class="gate-icon">🔒</div>
+      <h1 class="gate-title">Driver Call List</h1>
+      <p class="gate-sub">Authorized Personnel Only</p>
+      <div class="gate-field-wrap">
+        <input
+          type="password"
+          id="accessKeyInput"
+          class="gate-input"
+          placeholder="Enter access key"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        >
+        <button id="btnAccessKey" class="gate-btn">Unlock</button>
       </div>
-      <div class="header-title">
-        <h1>Driver Call List</h1>
-        <span class="header-sub">Click-to-Call Directory</span>
-      </div>
-    </div>
-
-    <div class="search-row">
-      <input
-        type="search"
-        id="searchBox"
-        placeholder="Search by name or number…"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        aria-label="Search drivers"
-        inputmode="search"
-      >
-    </div>
-
-    <div class="filter-btns" role="group" aria-label="Filter by location">
-      <button class="filter-btn active" data-loc="all">All</button>
-      <button class="filter-btn" data-loc="greensboro">GRENC</button>
-      <button class="filter-btn" data-loc="mebane">MEBNC</button>
-    </div>
-
-    <p class="count-bar" id="countBar" aria-live="polite"></p>
-
-    <button id="btnAdminLogin" style="width:100%;margin-top:6px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;">🔑 Admin Login</button>
-
-    <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
-      <button id="btnSeedDb" style="flex:1;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;">🌱 Seed DB</button>
-      <button id="btnImport" style="flex:1;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;">📋 Import List</button>
-      <button id="btnAdminLogout" style="flex:1;padding:7px;border-radius:8px;border:1.5px solid rgba(255,100,100,0.5);background:transparent;color:rgba(255,150,150,0.85);font-size:12px;font-weight:600;cursor:pointer;">🔓 Log Out</button>
-    </div>
-  </header>
-
-  <!-- Add / Edit Panel -->
-  <div class="add-panel" id="addPanel">
-    <div class="add-panel-header">
-      <span id="addPanelTitle">Add Driver</span>
-      <button class="panel-close-btn" id="panelCloseBtn" aria-label="Close panel">✕</button>
-    </div>
-    <div class="add-panel-body">
-
-      <div class="photo-row">
-        <div class="photo-preview" id="photoPreview">
-          <span class="photo-placeholder">👤</span>
-        </div>
-        <div class="photo-btns">
-          <label class="btn-camera" for="cameraInput">📷 Take Photo</label>
-          <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
-          <label class="btn-gallery" for="galleryInput">🖼 Choose Photo</label>
-          <input type="file" id="galleryInput" accept="image/*" style="display:none">
-        </div>
-      </div>
-
-      <div class="field-row">
-        <div class="field-group">
-          <label for="inputLastName">Last Name</label>
-          <input type="text" id="inputLastName" placeholder="Last name" autocapitalize="words">
-        </div>
-        <div class="field-group">
-          <label for="inputFirstName">First Name</label>
-          <input type="text" id="inputFirstName" placeholder="First name" autocapitalize="words">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field-group">
-          <label for="inputLocation">Location (SLIC)</label>
-          <select id="inputLocation">
-            <option value="Greensboro">GRENC</option>
-            <option value="Mebane">MEBNC</option>
-          </select>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field-group">
-          <label for="inputPhone">Primary Phone</label>
-          <input type="tel" id="inputPhone" placeholder="Any format — auto-normalized">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field-group">
-          <label for="inputAltPhone">Alt Phone <span class="optional">(optional)</span></label>
-          <input type="tel" id="inputAltPhone" placeholder="Any format — auto-normalized">
-        </div>
-      </div>
-      <div class="panel-actions">
-        <button class="btn-cancel" id="btnCancel">Cancel</button>
-        <button class="btn-save" id="btnSave">Save Driver</button>
-      </div>
-      <p class="panel-note" id="panelNote"></p>
-    </div>
-  </div>
-  <div class="panel-overlay" id="panelOverlay"></div>
-
-  <!-- Delete Confirmation Modal -->
-  <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
-    <div class="modal">
-      <div class="modal-icon">🗑</div>
-      <h2 class="modal-title" id="deleteModalTitle">Delete Driver?</h2>
-      <p class="modal-body" id="deleteModalBody">This will permanently remove this driver.</p>
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" id="deleteCancel">Keep</button>
-        <button class="btn-delete-confirm" id="deleteConfirm">Delete</button>
-      </div>
+      <button id="btnBiometric" class="gate-bio-btn" style="display:none">
+        <span class="bio-icon">👆</span> Use Biometrics
+      </button>
+      <p id="gateError" class="gate-error"></p>
     </div>
   </div>
 
-  <!-- Import Modal -->
-  <div class="modal-backdrop" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
-    <div class="modal" style="max-width:420px;border-top-color:#351C15;">
-      <div class="modal-icon">📋</div>
-      <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
-      <p class="modal-body">Upload a new <code>drivers.json</code> file. Existing drivers will be updated, new ones added. Drivers not in the new list will be removed.</p>
-      <div style="margin-bottom:14px;">
-        <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose JSON file</label>
-        <input type="file" id="importFileInput" accept=".json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;">
+  <!-- ── Main App (hidden until access granted) ── -->
+  <div id="appWrapper" style="display:none">
+
+    <!-- Watermark -->
+    <div class="watermark" aria-hidden="true">
+      <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+        <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z"/>
+      </svg>
+    </div>
+
+    <header class="header">
+      <div class="header-top">
+        <div class="header-title">
+          <h1>Driver Call List</h1>
+          <span class="header-sub">Click-to-Call Directory</span>
+        </div>
+        <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
       </div>
-      <p id="importStatus" style="font-size:12px;color:#5a3525;font-style:italic;min-height:18px;margin-bottom:12px;text-align:center;"></p>
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" id="importCancel">Cancel</button>
-        <button class="btn-save" id="importConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Import</button>
+
+      <div class="search-row">
+        <input
+          type="search"
+          id="searchBox"
+          placeholder="Search by name or number…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          aria-label="Search drivers"
+          inputmode="search"
+          readonly
+          onfocus="this.removeAttribute('readonly')"
+        >
+      </div>
+
+      <div class="filter-btns" role="group" aria-label="Filter by location">
+        <button class="filter-btn active" data-loc="all">All</button>
+        <button class="filter-btn" data-loc="greensboro">GRENC</button>
+        <button class="filter-btn" data-loc="mebane">MEBNC</button>
+      </div>
+
+      <p class="count-bar" id="countBar" aria-live="polite"></p>
+
+      <!-- Admin bar (hidden by default) -->
+      <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
+        <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
+        <button id="btnImport"    class="btn-admin">📋 Import</button>
+        <button id="btnScanDups"  class="btn-admin">🔍 Scan Dups</button>
+        <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
+        <button id="btnAdminLogout" class="btn-admin btn-admin-danger">🔓 Log Out</button>
+      </div>
+    </header>
+
+    <!-- Add / Edit Panel -->
+    <div class="add-panel" id="addPanel">
+      <div class="add-panel-header">
+        <span id="addPanelTitle">Add Driver</span>
+        <button class="panel-close-btn" id="panelCloseBtn" aria-label="Close panel">✕</button>
+      </div>
+      <div class="add-panel-body">
+
+        <div class="photo-row">
+          <div class="photo-preview" id="photoPreview">
+            <span class="photo-placeholder">👤</span>
+          </div>
+          <div class="photo-btns">
+            <label class="btn-camera" for="cameraInput">📷 Take Photo</label>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+            <label class="btn-gallery" for="galleryInput">🖼 Choose Photo</label>
+            <input type="file" id="galleryInput" accept="image/*" style="display:none">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputLastName">Last Name</label>
+            <input type="text" id="inputLastName" placeholder="Last name" autocapitalize="words">
+          </div>
+          <div class="field-group">
+            <label for="inputFirstName">First Name</label>
+            <input type="text" id="inputFirstName" placeholder="First name" autocapitalize="words">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputLocation">Location (SLIC)</label>
+            <select id="inputLocation">
+              <option value="Greensboro">GRENC</option>
+              <option value="Mebane">MEBNC</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputPhone">Primary Phone</label>
+            <input type="tel" id="inputPhone" placeholder="Any format — auto-normalized">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputAltPhone">Alt Phone <span class="optional">(optional)</span></label>
+            <input type="tel" id="inputAltPhone" placeholder="Any format — auto-normalized">
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-cancel" id="btnCancel">Cancel</button>
+          <button class="btn-save"   id="btnSave">Save Driver</button>
+        </div>
+        <p class="panel-note" id="panelNote"></p>
       </div>
     </div>
-  </div>
+    <div class="panel-overlay" id="panelOverlay"></div>
 
-  <!-- FAB -->
-  <button class="fab" id="fabAdd" aria-label="Add driver"><span>+</span></button>
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+      <div class="modal">
+        <div class="modal-icon">🗑</div>
+        <h2 class="modal-title" id="deleteModalTitle">Delete Driver?</h2>
+        <p class="modal-body" id="deleteModalBody">This will permanently remove this driver.</p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="deleteCancel">Keep</button>
+          <button class="btn-delete-confirm" id="deleteConfirm">Delete</button>
+        </div>
+      </div>
+    </div>
 
-  <!-- Card list -->
-  <main class="list" id="cardList">
-    <div class="swipe-hint" id="swipeHint">← Swipe fully left to delete a contact</div>
-    <div id="noResults" role="status">No drivers found matching your search.</div>
-  </main>
+    <!-- Import Modal -->
+    <div class="modal-backdrop" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+      <div class="modal" style="max-width:420px;border-top-color:#351C15;">
+        <div class="modal-icon">📋</div>
+        <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
+        <p class="modal-body">Upload a <code>drivers.json</code> or <code>.pdf</code> file. Existing drivers will be updated, new ones added. Drivers not in the new list will be removed.</p>
 
+        <!-- Progress bar -->
+        <div id="importProgressWrap" style="display:none;margin-bottom:10px;">
+          <div style="background:#e5d5cc;border-radius:20px;height:8px;overflow:hidden;">
+            <div id="importProgressBar" style="height:100%;width:0%;background:#351C15;border-radius:20px;transition:width 0.2s ease;"></div>
+          </div>
+          <p id="importProgressLabel" style="font-size:11px;color:#5a3525;text-align:center;margin-top:4px;"></p>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose JSON or PDF file</label>
+          <input type="file" id="importFileInput" accept=".json,application/json,.pdf,application/pdf" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;">
+        </div>
+
+        <!-- Update log -->
+        <div id="importUpdateLog" style="display:none;margin-bottom:12px;background:#f5ede8;border-radius:9px;padding:10px;font-size:12px;color:#351C15;">
+          <strong style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Update Log</strong>
+          <div id="importLogEntries" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;"></div>
+        </div>
+
+        <p id="importStatus" style="font-size:12px;color:#5a3525;font-style:italic;min-height:18px;margin-bottom:12px;text-align:center;"></p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="importCancel">Cancel</button>
+          <button class="btn-save" id="importConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duplicate Scan Modal -->
+    <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
+      <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
+        <div class="modal-icon">🔍</div>
+        <h2 class="modal-title">Duplicate Scan</h2>
+        <div id="dupResults" style="max-height:300px;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;"></div>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="dupClose">Close</button>
+          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Delete Flagged</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" id="fabAdd" aria-label="Add driver" style="display:none"><span>+</span></button>
+
+    <!-- Card list -->
+    <main class="list" id="cardList">
+      <div class="swipe-hint" id="swipeHint">← Swipe fully left to delete a contact</div>
+      <div id="noResults" role="status">No drivers found matching your search.</div>
+    </main>
+
+  </div><!-- /#appWrapper -->
+
+  <!-- pdf.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
