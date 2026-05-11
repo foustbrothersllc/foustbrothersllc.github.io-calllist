@@ -1064,7 +1064,7 @@ function initApp() {
       const drivers = await r.json();
       let done = 0;
       const total = drivers.length;
-      const BATCH = 5;
+      const BATCH = 10;
       for (let i = 0; i < drivers.length; i += BATCH) {
         const batch = drivers.slice(i, i + BATCH);
         await Promise.all(batch.map(async function(driver) {
@@ -1074,7 +1074,7 @@ function initApp() {
         }));
         done += batch.length;
         btn.textContent = '⏳ ' + done + '/' + total;
-        await new Promise(res => setTimeout(res, 500));
+        await new Promise(res => setTimeout(res, 100));
       }
       btn.textContent = '✅ Seeded ' + total + '!';
       setTimeout(function() { btn.textContent = '🌱 Seed DB'; btn.disabled = false; }, 3000);
