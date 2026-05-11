@@ -63,6 +63,11 @@ let isAdmin = false;
   const deleteCancel   = document.getElementById('deleteCancel');
   const deleteConfirm  = document.getElementById('deleteConfirm');
   const deleteBody     = document.getElementById('deleteModalBody');
+  const importModal    = document.getElementById('importModal');
+  const importCancel   = document.getElementById('importCancel');
+  const importConfirm  = document.getElementById('importConfirm');
+  const importFileInput= document.getElementById('importFileInput');
+  const importStatus   = document.getElementById('importStatus');
 
   // ── State ────────────────────────────────────────────────────
   let activeFilter        = 'all';
@@ -517,18 +522,133 @@ let isAdmin = false;
 
   // ── Admin login ───────────────────────────────────────────────
   // Trigger: hold down the driver count bar for 1.5 seconds
+  function showAdminControls() {
+    fabAdd.style.display = 'flex';
+    // Show import button in header if not already there
+    if (!document.getElementById('btnImport')) {
+      const btn = document.createElement('button');
+      btn.id = 'btnImport';
+      btn.textContent = '📋 Import List';
+      btn.style.cssText = 'display:block;width:100%;margin-top:6px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.3px;';
+      btn.addEventListener('click', openImportModal);
+      document.querySelector('.filter-btns').after(btn);
+    }
+  }
+
   function promptAdminLogin() {
     const pw = prompt('Enter admin password:');
     if (pw === ADMIN_PASSWORD) {
       isAdmin = true;
       localStorage.setItem('ups_admin', '1');
-      fabAdd.style.display = 'flex';
+      showAdminControls();
       const drivers = Array.from(driverMap.values());
       renderCards(drivers);
     } else if (pw !== null) {
       alert('❌ Incorrect password.');
     }
   }
+
+  // ── Import modal ─────────────────────────────────────────────
+  function openImportModal() {
+    importFileInput.value = '';
+    importStatus.textContent = '';
+    importConfirm.disabled = false;
+    importConfirm.textContent = 'Import';
+    importModal.classList.add('open');
+  }
+
+  function closeImportModal() {
+    importModal.classList.remove('open');
+  }
+
+  async function runImport() {
+    const file = importFileInput.files[0];
+    if (!file) {
+      importStatus.textContent = '⚠️ Please choose a JSON file first.';
+      return;
+    }
+
+    importConfirm.disabled = true;
+    importConfirm.textContent = 'Importing…';
+    importStatus.textContent = 'Reading file…';
+
+    let newDrivers;
+    try {
+      const text = await file.text();
+      newDrivers = JSON.parse(text);
+      if (!Array.isArray(newDrivers)) throw new Error('File must be a JSON array.');
+    } catch (e) {
+      importStatus.textContent = '❌ Invalid JSON: ' + e.message;
+      importConfirm.disabled = false;
+      importConfirm.textContent = 'Import';
+      return;
+    }
+
+    // Build map of incoming drivers
+    const incomingMap = new Map();
+    newDrivers.forEach(function(d) {
+      const key = driverKey(d.lastName, d.firstName);
+      incomingMap.set(keyToDocId(key), d);
+    });
+
+    // Get current Firestore docs
+    importStatus.textContent = 'Comparing with existing list…';
+    let snapshot;
+    try {
+      snapshot = await getDocs(driversCol);
+    } catch(e) {
+      importStatus.textContent = '❌ Failed to read database: ' + e.message;
+      importConfirm.disabled = false;
+      importConfirm.textContent = 'Import';
+      return;
+    }
+
+    const toDelete = [];
+    snapshot.forEach(function(d) {
+      if (!incomingMap.has(d.id)) toDelete.push(d.id);
+    });
+
+    const total   = incomingMap.size;
+    const removed = toDelete.length;
+    let done = 0;
+
+    importStatus.textContent = 'Uploading ' + total + ' drivers…';
+
+    try {
+      // Upsert all incoming drivers in batches of 20
+      const entries = Array.from(incomingMap.entries());
+      for (let i = 0; i < entries.length; i += 20) {
+        const batch = entries.slice(i, i + 20);
+        await Promise.all(batch.map(function([id, driver]) {
+          return setDoc(doc(db, 'drivers', id), driver);
+        }));
+        done += batch.length;
+        importStatus.textContent = 'Uploading… ' + done + ' / ' + total;
+      }
+
+      // Delete drivers no longer in the list
+      if (toDelete.length > 0) {
+        importStatus.textContent = 'Removing ' + removed + ' old drivers…';
+        await Promise.all(toDelete.map(function(id) {
+          return deleteDoc(doc(db, 'drivers', id));
+        }));
+      }
+
+      importStatus.textContent = '✅ Done! ' + total + ' drivers imported, ' + removed + ' removed.';
+      importConfirm.textContent = 'Import';
+      setTimeout(closeImportModal, 2000);
+    } catch(e) {
+      importStatus.textContent = '❌ Import failed: ' + e.message;
+      importConfirm.disabled = false;
+      importConfirm.textContent = 'Import';
+    }
+  }
+
+  importCancel.addEventListener('click', closeImportModal);
+  importConfirm.addEventListener('click', runImport);
+  importModal.addEventListener('click', function(e) {
+    if (e.target === importModal) closeImportModal();
+  });
 
   let adminPressTimer = null;
   function startAdminPress() { adminPressTimer = setTimeout(promptAdminLogin, 1500); }
@@ -562,7 +682,12 @@ let isAdmin = false;
   if (localStorage.getItem('ups_admin') === '1') isAdmin = true;
 
   // Non-admins don't see the FAB
-  if (!isAdmin) fabAdd.style.display = 'none';
+  if (!isAdmin) {
+    fabAdd.style.display = 'none';
+  } else {
+    // Restore import button for returning admins (after cards render)
+    setTimeout(showAdminControls, 100);
+  }
 
   // Loading indicator
   const loadingMsg = document.createElement('p');

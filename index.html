@@ -126,6 +126,24 @@
     </div>
   </div>
 
+  <!-- Import Modal -->
+  <div class="modal-backdrop" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+    <div class="modal" style="max-width:420px;border-top-color:#351C15;">
+      <div class="modal-icon">📋</div>
+      <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
+      <p class="modal-body">Upload a new <code>drivers.json</code> file. Existing drivers will be updated, new ones added. Drivers not in the new list will be removed.</p>
+      <div style="margin-bottom:14px;">
+        <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose JSON file</label>
+        <input type="file" id="importFileInput" accept=".json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;">
+      </div>
+      <p id="importStatus" style="font-size:12px;color:#5a3525;font-style:italic;min-height:18px;margin-bottom:12px;text-align:center;"></p>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" id="importCancel">Cancel</button>
+        <button class="btn-save" id="importConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Import</button>
+      </div>
+    </div>
+  </div>
+
   <!-- FAB -->
   <button class="fab" id="fabAdd" aria-label="Add driver"><span>+</span></button>
 
