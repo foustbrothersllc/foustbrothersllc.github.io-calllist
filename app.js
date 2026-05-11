@@ -1062,19 +1062,26 @@ function initApp() {
     try {
       const r = await fetch('drivers.json');
       const drivers = await r.json();
-      let done = 0;
       const total = drivers.length;
-      const BATCH = 10;
-      for (let i = 0; i < drivers.length; i += BATCH) {
-        const batch = drivers.slice(i, i + BATCH);
-        await Promise.all(batch.map(async function(driver) {
-          const key = driverKey(driver.lastName, driver.firstName);
-          const encrypted = await encryptDriver(driver);
-          return setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted);
+
+      // Encrypt all drivers in parallel first
+      btn.textContent = '⏳ Encrypting…';
+      const encrypted = await Promise.all(drivers.map(async function(driver) {
+        const key = driverKey(driver.lastName, driver.firstName);
+        const enc = await encryptDriver(driver);
+        return { id: keyToDocId(key), data: enc };
+      }));
+
+      // Write in batches of 20 with no delay
+      const BATCH = 20;
+      let done = 0;
+      for (let i = 0; i < encrypted.length; i += BATCH) {
+        const batch = encrypted.slice(i, i + BATCH);
+        await Promise.all(batch.map(function(e) {
+          return setDoc(doc(db, 'drivers', e.id), e.data);
         }));
         done += batch.length;
         btn.textContent = '⏳ ' + done + '/' + total;
-        await new Promise(res => setTimeout(res, 100));
       }
       btn.textContent = '✅ Seeded ' + total + '!';
       setTimeout(function() { btn.textContent = '🌱 Seed DB'; btn.disabled = false; }, 3000);
