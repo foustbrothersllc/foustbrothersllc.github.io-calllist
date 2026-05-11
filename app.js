@@ -106,20 +106,20 @@ async function decryptPhone(cipher) {
   }
 }
 
-// Encrypt a phone object { digits, display } → { enc, display }
+// Encrypt a phone object { digits, display } → { enc } only — no readable data in Firestore
 async function encryptPhoneObj(phoneObj) {
   if (!phoneObj || !phoneObj.digits) return null;
   const enc = await encryptPhone(phoneObj.digits);
-  return { enc, display: phoneObj.display };
+  return { enc }; // display intentionally excluded
 }
 
-// Decrypt { enc, display } → { digits, display }
+// Decrypt { enc } → { digits, display } — display rebuilt from decrypted digits
 async function decryptPhoneObj(phoneObj) {
   if (!phoneObj) return null;
   if (phoneObj.digits) return phoneObj; // legacy unencrypted
   if (!phoneObj.enc) return null;
   const digits = await decryptPhone(phoneObj.enc);
-  return digits ? { digits, display: phoneObj.display } : null;
+  return digits ? { digits, display: formatPhone(digits) } : null;
 }
 
 // Prepare driver for Firestore (encrypt phones)
