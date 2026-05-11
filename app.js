@@ -1,0 +1,606 @@
+/* ============================================================
+   UPS Driver Call List — app.js
+   ============================================================
+   - Full-width swipe-left-to-delete (must slide 100% of card width)
+   - Confirmation modal required before delete completes
+   - Phone primary + alt shown side-by-side below name
+   - Photo capture (camera or gallery) stored as data-URL on driver
+   - O(1) Set-based upsert; regex phone normalisation
+   - localStorage persistence: edits/adds/deletes survive page reload
+   ============================================================ */
+
+(function () {
+  'use strict';
+
+  // ── DOM refs ────────────────────────────────────────────────
+  const listEl        = document.getElementById('cardList');
+  const searchBox     = document.getElementById('searchBox');
+  const countBar      = document.getElementById('countBar');
+  const noResults     = document.getElementById('noResults');
+  const filterBtns    = document.querySelectorAll('.filter-btn');
+  const fabAdd        = document.getElementById('fabAdd');
+  const addPanel      = document.getElementById('addPanel');
+  const panelOverlay  = document.getElementById('panelOverlay');
+  const panelClose    = document.getElementById('panelCloseBtn');
+  const addPanelTitle = document.getElementById('addPanelTitle');
+  const btnCancel     = document.getElementById('btnCancel');
+  const btnSave       = document.getElementById('btnSave');
+  const panelNote     = document.getElementById('panelNote');
+  const photoPreview  = document.getElementById('photoPreview');
+  const cameraInput   = document.getElementById('cameraInput');
+  const galleryInput  = document.getElementById('galleryInput');
+  const inputLastName  = document.getElementById('inputLastName');
+  const inputFirstName = document.getElementById('inputFirstName');
+  const inputLocation  = document.getElementById('inputLocation');
+  const inputPhone     = document.getElementById('inputPhone');
+  const inputAltPhone  = document.getElementById('inputAltPhone');
+  const deleteModal   = document.getElementById('deleteModal');
+  const deleteCancel  = document.getElementById('deleteCancel');
+  const deleteConfirm = document.getElementById('deleteConfirm');
+  const deleteBody    = document.getElementById('deleteModalBody');
+
+  // ── State ────────────────────────────────────────────────────
+  let activeFilter  = 'all';
+  let allCards      = [];       // card-outer DOM elements
+  const driverSet   = new Set();
+  const driverMap   = new Map();
+  let editingKey    = null;
+  let pendingDeleteKey = null;
+  let currentPhotoDataUrl = null;  // photo being added/edited
+
+  // ── localStorage persistence ─────────────────────────────────
+  const STORAGE_KEY = 'ups_drivers_v1';
+
+  function saveToStorage() {
+    try {
+      const drivers = Array.from(driverMap.values());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(drivers));
+    } catch (e) {
+      console.warn('localStorage save failed:', e);
+    }
+  }
+
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {
+      console.warn('localStorage load failed:', e);
+    }
+    return null;
+  }
+
+  // ── SLIC labels ──────────────────────────────────────────────
+  const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC' };
+  function slicLabel(loc) {
+    return loc ? (SLIC_DISPLAY[loc.toLowerCase()] || loc.toUpperCase()) : '';
+  }
+
+  // ── Phone helpers ────────────────────────────────────────────
+  function normalisePhone(raw) {
+    if (!raw) return null;
+    const d = raw.replace(/[^0-9]/g, '');
+    return d.length >= 10 ? d.slice(-10) : null;
+  }
+  function formatPhone(digits) {
+    if (!digits || digits.length !== 10) return digits || '';
+    return '(' + digits.slice(0,3) + ') ' + digits.slice(3,6) + '-' + digits.slice(6);
+  }
+
+  // ── Driver key ───────────────────────────────────────────────
+  function driverKey(lastName, firstName) {
+    return (lastName + '|' + firstName).toLowerCase();
+  }
+
+  // ── Register ─────────────────────────────────────────────────
+  function registerDriver(driver) {
+    const key = driverKey(driver.lastName, driver.firstName);
+    driverSet.add(key);
+    driverMap.set(key, driver);
+  }
+
+  // ── Badge ────────────────────────────────────────────────────
+  function makeBadge(location) {
+    if (!location) return null;
+    const s = document.createElement('span');
+    s.className = 'loc-badge loc-' + location.toLowerCase();
+    s.textContent = slicLabel(location);
+    return s;
+  }
+
+  // ── Phone button ─────────────────────────────────────────────
+  function makePhoneBtn(digits, isPrimary) {
+    const a = document.createElement('a');
+    a.href = 'tel:+1' + digits;
+    a.className = 'phone-btn ' + (isPrimary ? 'primary' : 'alt');
+
+    const icon = document.createElement('span');
+    icon.className = 'phone-icon';
+    icon.textContent = '📞';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const num = document.createElement('span');
+    num.className = 'phone-number';
+    num.textContent = formatPhone(digits);
+
+    a.appendChild(icon);
+    a.appendChild(num);
+
+    if (!isPrimary) {
+      const tag = document.createElement('span');
+      tag.className = 'alt-tag';
+      tag.textContent = 'Alt';
+      a.appendChild(tag);
+    }
+    return a;
+  }
+
+  // ── Build card ───────────────────────────────────────────────
+  function buildCard(driver) {
+    const key = driverKey(driver.lastName, driver.firstName);
+
+    // Outer wrapper (swipe container)
+    const outer = document.createElement('div');
+    outer.className = 'card-outer';
+    outer.dataset.key = key;
+
+    // Red delete background
+    const deleteBg = document.createElement('div');
+    deleteBg.className = 'card-delete-bg';
+    deleteBg.innerHTML = '<span style="font-size:20px">🗑</span><span>DELETE</span>';
+    outer.appendChild(deleteBg);
+
+    // White card face
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // Search data on outer
+    const phonePrimary = driver.phone    ? driver.phone.digits    : '';
+    const phoneAlt     = driver.altPhone ? driver.altPhone.digits : '';
+    outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt, slicLabel(driver.location), driver.location].join(' ').toLowerCase();
+    outer.dataset.location = (driver.location || '').toLowerCase();
+
+    // ── Header: avatar + name block + badge ──
+    const header = document.createElement('div');
+    header.className = 'card-header';
+
+    // Avatar
+    if (driver.photo) {
+      const img = document.createElement('img');
+      img.src = driver.photo;
+      img.className = 'card-avatar';
+      img.alt = driver.firstName + ' ' + driver.lastName;
+      header.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'card-avatar-placeholder';
+      ph.textContent = '👤';
+      header.appendChild(ph);
+    }
+
+    const nameBlock = document.createElement('div');
+    nameBlock.className = 'card-name-block';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'name';
+    nameEl.textContent = driver.lastName + ', ' + driver.firstName;
+    nameBlock.appendChild(nameEl);
+    header.appendChild(nameBlock);
+
+    const badge = makeBadge(driver.location);
+    if (badge) header.appendChild(badge);
+
+    card.appendChild(header);
+
+    // ── Phone buttons: side by side ──
+    if (driver.phone || driver.altPhone) {
+      const phones = document.createElement('div');
+      phones.className = 'phones';
+      if (driver.phone && driver.phone.digits) {
+        phones.appendChild(makePhoneBtn(driver.phone.digits, true));
+      }
+      if (driver.altPhone && driver.altPhone.digits) {
+        phones.appendChild(makePhoneBtn(driver.altPhone.digits, false));
+      }
+      card.appendChild(phones);
+    } else {
+      const none = document.createElement('span');
+      none.className = 'no-phone';
+      none.textContent = 'No phone listed';
+      card.appendChild(none);
+    }
+
+    // ── Edit button ──
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-edit';
+    editBtn.textContent = '✏️ Edit';
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openEditPanel(key);
+    });
+    actions.appendChild(editBtn);
+    card.appendChild(actions);
+
+    outer.appendChild(card);
+
+    // ── Swipe-to-delete (full width required) ──
+    attachSwipe(outer, card, key);
+
+    return outer;
+  }
+
+  // ── Swipe logic ──────────────────────────────────────────────
+  function attachSwipe(outer, card, key) {
+    let startX = 0, startY = 0, currentX = 0;
+    let swiping = false, locked = false, dirLocked = false;
+    const THRESHOLD = 0.85; // must slide 85% of card width to trigger
+
+    function onStart(e) {
+      if (locked) return;
+      const touch = e.touches ? e.touches[0] : e;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      currentX = 0;
+      swiping = true;
+      dirLocked = false;
+      card.style.transition = 'none';
+    }
+
+    function onMove(e) {
+      if (!swiping || locked) return;
+      const touch = e.touches ? e.touches[0] : e;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+
+      // Determine primary direction on first significant move
+      if (!dirLocked && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        dirLocked = true;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          // Vertical scroll — abandon swipe
+          swiping = false;
+          return;
+        }
+      }
+      if (!dirLocked) return;
+
+      // Only allow leftward swipe
+      currentX = Math.min(0, dx);
+      card.style.transform = 'translateX(' + currentX + 'px)';
+
+      // Prevent page scroll while swiping horizontally
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function onEnd() {
+      if (!swiping || locked) return;
+      swiping = false;
+      const cardWidth = card.offsetWidth;
+
+      if (Math.abs(currentX) >= cardWidth * THRESHOLD) {
+        // Slide fully off then show confirm modal
+        card.style.transition = 'transform 0.22s ease-in';
+        card.style.transform  = 'translateX(-' + cardWidth + 'px)';
+        locked = true;
+        setTimeout(function () { openDeleteModal(key, outer, card); }, 220);
+      } else {
+        // Snap back
+        card.style.transition = 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)';
+        card.style.transform  = 'translateX(0)';
+      }
+    }
+
+    // Touch
+    card.addEventListener('touchstart', onStart, { passive: true });
+    card.addEventListener('touchmove',  onMove,  { passive: false });
+    card.addEventListener('touchend',   onEnd,   { passive: true });
+
+    // Mouse (desktop testing)
+    card.addEventListener('mousedown', function(e) {
+      onStart(e);
+      function mm(ev) { onMove(ev); }
+      function mu()   { onEnd();  document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup',   mu);
+    });
+  }
+
+  // ── Delete modal ─────────────────────────────────────────────
+  function openDeleteModal(key, outer, card) {
+    const driver = driverMap.get(key);
+    if (!driver) return;
+    pendingDeleteKey = key;
+    deleteBody.textContent = 'Remove ' + driver.lastName + ', ' + driver.firstName + ' from the list? This cannot be undone.';
+    deleteModal.classList.add('open');
+
+    // If user cancels, snap the card back
+    function onCancel() {
+      card.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+      card.style.transform  = 'translateX(0)';
+      // Re-enable swipe by clearing locked state (re-attach fresh)
+      // Easiest: just rebuild card in place
+      const newOuter = buildCard(driver);
+      outer.replaceWith(newOuter);
+      const idx = allCards.indexOf(outer);
+      if (idx !== -1) allCards[idx] = newOuter;
+      pendingDeleteKey = null;
+      deleteModal.classList.remove('open');
+      cleanup();
+    }
+
+    function onConfirm() {
+      deleteDriver(key, outer);
+      pendingDeleteKey = null;
+      deleteModal.classList.remove('open');
+      cleanup();
+    }
+
+    function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
+
+    function cleanup() {
+      deleteCancel.removeEventListener('click', onCancel);
+      deleteConfirm.removeEventListener('click', onConfirm);
+      deleteModal.removeEventListener('click', onBackdrop);
+    }
+
+    deleteCancel.addEventListener('click',  onCancel);
+    deleteConfirm.addEventListener('click', onConfirm);
+    deleteModal.addEventListener('click',   onBackdrop);
+  }
+
+  // ── Delete driver ────────────────────────────────────────────
+  function deleteDriver(key, outer) {
+    driverSet.delete(key);
+    driverMap.delete(key);
+    const el = outer || listEl.querySelector('[data-key="' + key + '"]');
+    if (el) {
+      el.style.transition = 'max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease';
+      el.style.maxHeight  = el.offsetHeight + 'px';
+      el.style.overflow   = 'hidden';
+      requestAnimationFrame(function() {
+        el.style.maxHeight = '0';
+        el.style.opacity   = '0';
+        el.style.marginBottom = '0';
+      });
+      setTimeout(function() { el.remove(); }, 310);
+      allCards = allCards.filter(function(c) { return c !== el; });
+    }
+    saveToStorage();
+    applyFilter();
+  }
+
+  // ── Render all cards ─────────────────────────────────────────
+  function renderCards(drivers) {
+    allCards.forEach(function(c) { c.remove(); });
+    allCards = [];
+    const frag = document.createDocumentFragment();
+    drivers.forEach(function(driver) {
+      registerDriver(driver);
+      const outer = buildCard(driver);
+      frag.appendChild(outer);
+      allCards.push(outer);
+    });
+    listEl.insertBefore(frag, noResults);
+    applyFilter();
+  }
+
+  // ── Upsert ───────────────────────────────────────────────────
+  function upsertDriver(driver) {
+    const key   = driverKey(driver.lastName, driver.firstName);
+    const isNew = !driverSet.has(key);
+    registerDriver(driver);
+
+    const newOuter = buildCard(driver);
+
+    if (!isNew) {
+      const existing = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+      if (existing) {
+        listEl.replaceChild(newOuter, existing);
+        const idx = allCards.indexOf(existing);
+        if (idx !== -1) allCards[idx] = newOuter;
+      } else {
+        allCards.push(newOuter);
+        listEl.insertBefore(newOuter, noResults);
+      }
+    } else {
+      const insertBefore = allCards.find(function(c) {
+        const cd = driverMap.get(c.dataset.key);
+        if (!cd) return false;
+        return (cd.lastName + cd.firstName).toLowerCase() > (driver.lastName + driver.firstName).toLowerCase();
+      });
+      if (insertBefore) {
+        listEl.insertBefore(newOuter, insertBefore);
+        allCards.splice(allCards.indexOf(insertBefore), 0, newOuter);
+      } else {
+        allCards.push(newOuter);
+        listEl.insertBefore(newOuter, noResults);
+      }
+    }
+    saveToStorage();
+    applyFilter();
+  }
+
+  // ── Filter ───────────────────────────────────────────────────
+  function updateCount(visible) {
+    countBar.textContent = 'Showing ' + visible + ' of ' + allCards.length + ' drivers';
+  }
+
+  function applyFilter() {
+    const query = searchBox.value.toLowerCase().trim();
+    let visible = 0;
+    allCards.forEach(function(outer) {
+      const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
+      const textMatch = !query || outer.dataset.search.includes(query);
+      const show = locMatch && textMatch;
+      outer.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    noResults.style.display = visible === 0 ? 'block' : 'none';
+    updateCount(visible);
+  }
+
+  // ── Photo input ──────────────────────────────────────────────
+  function handlePhotoFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      currentPhotoDataUrl = e.target.result;
+      photoPreview.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = currentPhotoDataUrl;
+      photoPreview.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  cameraInput.addEventListener('change', function() { handlePhotoFile(this.files[0]); });
+  galleryInput.addEventListener('change', function() { handlePhotoFile(this.files[0]); });
+
+  // ── Panel helpers ────────────────────────────────────────────
+  function resetPhotoPreview() {
+    currentPhotoDataUrl = null;
+    photoPreview.innerHTML = '<span class="photo-placeholder">👤</span>';
+  }
+
+  function openAddPanel() {
+    editingKey = null;
+    addPanelTitle.textContent = 'Add Driver';
+    btnSave.textContent = 'Save Driver';
+    inputLastName.value  = '';
+    inputFirstName.value = '';
+    inputLocation.value  = 'Greensboro';
+    inputPhone.value     = '';
+    inputAltPhone.value  = '';
+    panelNote.textContent = '';
+    resetPhotoPreview();
+    showPanel();
+  }
+
+  function openEditPanel(key) {
+    const driver = driverMap.get(key);
+    if (!driver) return;
+    editingKey = key;
+    addPanelTitle.textContent = 'Edit Driver';
+    btnSave.textContent = 'Update Driver';
+    inputLastName.value  = driver.lastName;
+    inputFirstName.value = driver.firstName;
+    inputLocation.value  = driver.location || 'Greensboro';
+    inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
+    inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
+    panelNote.textContent = '';
+    // Show existing photo if any
+    if (driver.photo) {
+      currentPhotoDataUrl = driver.photo;
+      photoPreview.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = driver.photo;
+      photoPreview.appendChild(img);
+    } else {
+      resetPhotoPreview();
+    }
+    showPanel();
+  }
+
+  function showPanel() {
+    panelOverlay.classList.add('visible');
+    addPanel.classList.add('open');
+    setTimeout(function() { inputLastName.focus(); }, 350);
+  }
+
+  function closePanel() {
+    addPanel.classList.remove('open');
+    panelOverlay.classList.remove('visible');
+  }
+
+  // ── Save ─────────────────────────────────────────────────────
+  function saveDriver() {
+    const lastName  = inputLastName.value.trim();
+    const firstName = inputFirstName.value.trim();
+    if (!lastName || !firstName) {
+      panelNote.textContent = '⚠️ First and last name are required.';
+      return;
+    }
+    const rawPhone    = inputPhone.value.trim();
+    const rawAltPhone = inputAltPhone.value.trim();
+    const phoneDigits    = normalisePhone(rawPhone);
+    const altPhoneDigits = normalisePhone(rawAltPhone);
+    if (rawPhone && !phoneDigits) {
+      panelNote.textContent = '⚠️ Primary phone needs at least 10 digits.';
+      return;
+    }
+    if (rawAltPhone && !altPhoneDigits) {
+      panelNote.textContent = '⚠️ Alt phone needs at least 10 digits.';
+      return;
+    }
+
+    const newKey = driverKey(lastName, firstName);
+    const isNew  = !driverSet.has(newKey);
+
+    // If name changed during edit, remove old entry
+    if (editingKey && editingKey !== newKey) {
+      const oldOuter = listEl.querySelector('.card-outer[data-key="' + editingKey + '"]');
+      driverSet.delete(editingKey);
+      driverMap.delete(editingKey);
+      if (oldOuter) {
+        allCards = allCards.filter(function(c) { return c !== oldOuter; });
+        oldOuter.remove();
+      }
+    }
+
+    const driver = {
+      lastName:  lastName,
+      firstName: firstName,
+      location:  inputLocation.value,
+      phone:    phoneDigits    ? { digits: phoneDigits,    display: formatPhone(phoneDigits) }    : null,
+      altPhone: altPhoneDigits ? { digits: altPhoneDigits, display: formatPhone(altPhoneDigits) } : null,
+      photo:    currentPhotoDataUrl || (editingKey ? (driverMap.get(editingKey) || {}).photo : null) || null,
+    };
+
+    upsertDriver(driver);
+    panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
+    setTimeout(closePanel, 600);
+  }
+
+  // ── Event listeners ──────────────────────────────────────────
+  searchBox.addEventListener('input', applyFilter);
+
+  filterBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      filterBtns.forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      activeFilter = btn.dataset.loc;
+      applyFilter();
+    });
+  });
+
+  fabAdd.addEventListener('click', openAddPanel);
+  panelClose.addEventListener('click', closePanel);
+  btnCancel.addEventListener('click', closePanel);
+  panelOverlay.addEventListener('click', closePanel);
+  btnSave.addEventListener('click', saveDriver);
+
+  // ── Load data ─────────────────────────────────────────────────
+  const saved = loadFromStorage();
+  if (saved) {
+    // Use persisted data — no network fetch needed
+    renderCards(saved);
+  } else {
+    // First run: load from drivers.json and save to localStorage
+    fetch('drivers.json')
+      .then(function(res) {
+        if (!res.ok) throw new Error('Failed to load drivers.json: ' + res.status);
+        return res.json();
+      })
+      .then(function(drivers) {
+        renderCards(drivers);
+        saveToStorage(); // seed localStorage for future reloads
+      })
+      .catch(function(err) {
+        listEl.innerHTML = '<p style="padding:24px;color:#b91c1c;">Error loading data: ' + err.message + '</p>';
+        console.error(err);
+      });
+  }
+
+})();
