@@ -29,13 +29,13 @@ import {
 
 // ── Firebase config ──────────────────────────────────────────
 const firebaseConfig = {
-  apiKey:            "AIzaSyDVgCrg8HyEgOLEN0f3A9L4LcqWhOqMX_g",
-  authDomain:        "call-list-editer.firebaseapp.com",
-  projectId:         "call-list-editer",
-  storageBucket:     "call-list-editer.firebasestorage.app",
-  messagingSenderId: "321715928634",
-  appId:             "1:321715928634:web:758162c068fe8ebaf17f03",
-  measurementId:     "G-2T1NB1Y7N5"
+  apiKey:            "AIzaSyCVclqKPtCl-xu38NXY9mLNHClxRmnd1vE",
+  authDomain:        "driver-manger.firebaseapp.com",
+  projectId:         "driver-manger",
+  storageBucket:     "driver-manger.firebasestorage.app",
+  messagingSenderId: "734246658670",
+  appId:             "1:734246658670:web:26b646a6c0eb35ec2efc7f",
+  measurementId:     "G-JGYDLKDMC8"
 };
 
 const firebaseApp  = initializeApp(firebaseConfig);
@@ -104,6 +104,12 @@ async function decryptPhone(cipher) {
   } catch (e) {
     return null;
   }
+}
+
+// ── formatPhone at global scope (needed by decryptPhoneObj) ──
+function formatPhone(digits) {
+  if (!digits || digits.length !== 10) return digits || '';
+  return '(' + digits.slice(0,3) + ') ' + digits.slice(3,6) + '-' + digits.slice(6);
 }
 
 // Encrypt a phone object { digits, display } → { enc } only — no readable data in Firestore
@@ -336,10 +342,6 @@ function initApp() {
     if (!raw) return null;
     const d = raw.replace(/[^0-9]/g, '');
     return d.length >= 10 ? d.slice(-10) : null;
-  }
-  function formatPhone(digits) {
-    if (!digits || digits.length !== 10) return digits || '';
-    return '(' + digits.slice(0,3) + ') ' + digits.slice(3,6) + '-' + digits.slice(6);
   }
 
   // ── Driver key / Firestore doc ID ────────────────────────────
