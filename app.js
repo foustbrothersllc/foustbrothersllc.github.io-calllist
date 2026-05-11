@@ -719,6 +719,7 @@ function initApp() {
 
     const encrypted = await encryptDriver(driver);
     setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted).catch(console.error);
+    addWrites(1);
     applyFilter();
   }
 
@@ -845,6 +846,47 @@ function initApp() {
     setTimeout(closePanel, 600);
   }
 
+  // ── Daily write counter ───────────────────────────────────────
+  const WRITE_COUNT_KEY  = 'dcl_write_count';
+  const WRITE_DATE_KEY   = 'dcl_write_date';
+  const DAILY_LIMIT      = 20000;
+
+  function getTodayStr() {
+    return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  }
+
+  function getWriteCount() {
+    const saved = localStorage.getItem(WRITE_DATE_KEY);
+    if (saved !== getTodayStr()) {
+      localStorage.setItem(WRITE_DATE_KEY, getTodayStr());
+      localStorage.setItem(WRITE_COUNT_KEY, '0');
+      return 0;
+    }
+    return parseInt(localStorage.getItem(WRITE_COUNT_KEY) || '0', 10);
+  }
+
+  function addWrites(n) {
+    const current = getWriteCount();
+    const next = current + n;
+    localStorage.setItem(WRITE_COUNT_KEY, String(next));
+    updateWriteBar();
+  }
+
+  function updateWriteBar() {
+    const bar = document.getElementById('writeCountBar');
+    if (!bar) return;
+    const count = getWriteCount();
+    const pct   = Math.min((count / DAILY_LIMIT) * 100, 100);
+    const color = pct > 80 ? '#b91c1c' : pct > 50 ? '#ca8a04' : '#FFB500';
+    bar.innerHTML =
+      '<span style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Today\'s writes</span>'
+      + '<div style="flex:1;background:rgba(255,255,255,0.1);border-radius:20px;height:6px;overflow:hidden;">'
+      +   '<div style="width:' + pct.toFixed(2) + '%;height:100%;background:' + color + ';border-radius:20px;transition:width 0.3s ease;"></div>'
+      + '</div>'
+      + '<span style="font-size:12px;font-weight:700;color:' + color + ';white-space:nowrap;">' + count.toLocaleString() + ' / ' + DAILY_LIMIT.toLocaleString() + '</span>'
+      + '<span style="font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap;">resets midnight PT</span>';
+  }
+
   // ── Admin login ───────────────────────────────────────────────
   function promptAdminLogin() {
     const pw = prompt('Enter admin password:');
@@ -862,6 +904,16 @@ function initApp() {
     fabAdd.style.display = 'flex';
     document.getElementById('adminBar').style.display = 'flex';
     document.getElementById('btnAdminLogin').style.display = 'none';
+
+    // Inject write counter bar if not already present
+    if (!document.getElementById('writeCountBar')) {
+      const wb = document.createElement('div');
+      wb.id = 'writeCountBar';
+      wb.style.cssText = 'display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.25);border-radius:8px;padding:8px 12px;margin-top:4px;';
+      document.getElementById('adminBar').after(wb);
+      updateWriteBar();
+    }
+
     if (!document.getElementById('bulkDeleteBar')) {
       const bar = document.createElement('div');
       bar.id = 'bulkDeleteBar';
@@ -1084,6 +1136,7 @@ function initApp() {
         }));
         done += batch.length;
         btn.textContent = '⏳ ' + done + '/' + total;
+        addWrites(batch.length);
       }
       btn.textContent = '✅ Seeded ' + total + '!';
       setTimeout(function() { btn.textContent = '🌱 Seed DB'; btn.disabled = false; }, 3000);
@@ -1181,6 +1234,7 @@ function initApp() {
         const pct = 50 + Math.round((done / total) * 40);
         setProgress(pct, 'Uploading… ' + done + ' / ' + total);
         importStatus.textContent = 'Uploading… ' + done + ' / ' + total;
+        addWrites(batch.length);
       }
 
       if (toDelete.length > 0) {
