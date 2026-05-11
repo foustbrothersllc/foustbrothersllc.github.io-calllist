@@ -31,7 +31,7 @@ const db          = getFirestore(firebaseApp);
 const driversCol  = collection(db, 'drivers');
 
 // ── Admin password — change this to whatever you want ────────
-const ADMIN_PASSWORD = 'UPS1907';
+const ADMIN_PASSWORD = 'ups2024';
 let isAdmin = false;
 
 (function () {
@@ -532,6 +532,45 @@ let isAdmin = false;
       btn.style.cssText = 'display:block;width:100%;margin-top:6px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.3px;';
       btn.addEventListener('click', openImportModal);
       document.querySelector('.filter-btns').after(btn);
+    }
+    // Show seed button if not already there
+    if (!document.getElementById('btnSeedDb')) {
+      const btn = document.createElement('button');
+      btn.id = 'btnSeedDb';
+      btn.textContent = '🌱 Seed Database from JSON';
+      btn.style.cssText = 'display:block;width:100%;margin-top:4px;padding:7px;border-radius:8px;border:1.5px solid rgba(255,181,0,0.5);background:transparent;color:rgba(255,255,255,0.85);font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.3px;';
+      btn.addEventListener('click', manualSeed);
+      document.getElementById('btnImport').after(btn);
+    }
+  }
+
+  async function manualSeed() {
+    const btn = document.getElementById('btnSeedDb');
+    btn.textContent = '⏳ Seeding…';
+    btn.disabled = true;
+    try {
+      const r = await fetch('drivers.json');
+      const drivers = await r.json();
+      let done = 0;
+      const total = drivers.length;
+      for (let i = 0; i < drivers.length; i += 20) {
+        const batch = drivers.slice(i, i + 20);
+        await Promise.all(batch.map(function(driver) {
+          const key = driverKey(driver.lastName, driver.firstName);
+          return setDoc(doc(db, 'drivers', keyToDocId(key)), driver);
+        }));
+        done += batch.length;
+        btn.textContent = '⏳ Seeding… ' + done + '/' + total;
+      }
+      btn.textContent = '✅ Seeded ' + total + ' drivers!';
+      setTimeout(function() {
+        btn.textContent = '🌱 Seed Database from JSON';
+        btn.disabled = false;
+      }, 3000);
+    } catch(e) {
+      btn.textContent = '❌ Failed: ' + e.message;
+      btn.disabled = false;
+      console.error(e);
     }
   }
 
