@@ -31,7 +31,7 @@ const db          = getFirestore(firebaseApp);
 const driversCol  = collection(db, 'drivers');
 
 // ── Admin password — change this to whatever you want ────────
-const ADMIN_PASSWORD = 'UPS1907';
+const ADMIN_PASSWORD = 'ups2024';
 let isAdmin = false;
 
 (function () {
@@ -543,18 +543,21 @@ let isAdmin = false;
       const drivers = await r.json();
       let done = 0;
       const total = drivers.length;
-      for (let i = 0; i < drivers.length; i += 20) {
-        const batch = drivers.slice(i, i + 20);
+      const BATCH = 10; // smaller batches to avoid rate limiting
+      for (let i = 0; i < drivers.length; i += BATCH) {
+        const batch = drivers.slice(i, i + BATCH);
         await Promise.all(batch.map(function(driver) {
           const key = driverKey(driver.lastName, driver.firstName);
           return setDoc(doc(db, 'drivers', keyToDocId(key)), driver);
         }));
         done += batch.length;
         btn.textContent = '⏳ Seeding… ' + done + '/' + total;
+        // Small pause between batches to avoid Firestore rate limits
+        await new Promise(function(res) { setTimeout(res, 300); });
       }
       btn.textContent = '✅ Seeded ' + total + ' drivers!';
       setTimeout(function() {
-        btn.textContent = '🌱 Seed Database from JSON';
+        btn.textContent = '🌱 Seed DB';
         btn.disabled = false;
       }, 3000);
     } catch(e) {
