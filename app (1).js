@@ -31,7 +31,7 @@ const db          = getFirestore(firebaseApp);
 const driversCol  = collection(db, 'drivers');
 
 // ── Admin password — change this to whatever you want ────────
-const ADMIN_PASSWORD = 'ups2024';
+const ADMIN_PASSWORD = 'UPS1907';
 let isAdmin = false;
 
 (function () {
