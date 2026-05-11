@@ -31,7 +31,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  background: var(--bg);
+  background: #000000;
   color: var(--text);
   min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
@@ -42,7 +42,7 @@ body {
 .access-gate {
   position: fixed;
   inset: 0;
-  background: var(--brown);
+  background: #000000;
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -130,15 +130,7 @@ body {
 }
 
 /* ── Watermark ── */
-.watermark {
-  position: fixed;
-  bottom: -60px; right: -60px;
-  width: 380px; height: 380px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.055;
-}
-.watermark svg { width: 100%; height: 100%; fill: var(--brown); }
+.watermark { display: none; }
 
 /* ── Header ── */
 .header {
