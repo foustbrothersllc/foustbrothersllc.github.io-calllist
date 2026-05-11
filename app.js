@@ -47,13 +47,13 @@ const db           = initializeFirestore(firebaseApp, {
 const driversCol   = collection(db, 'drivers');
 
 // ── Access & Admin keys ──────────────────────────────────────
-const ACCESS_KEY    = 'UPSTruckDriver';
+const ACCESS_KEY    = 'UPSFeederDriver';
 const ADMIN_PASSWORD = 'UPSFounded1907';
 
 // ── AES-256-GCM encryption helpers ──────────────────────────
 // Key is derived from a fixed passphrase using PBKDF2.
 // Phone digits are encrypted before writing to Firestore.
-const ENC_PASSPHRASE = 'driverlist-secure-2024';
+const ENC_PASSPHRASE = 'driverlist-UPSFeederDriver-2024';
 const ENC_SALT_HEX   = '4a3f2b1c8d9e0f5a'; // fixed salt
 
 async function getEncKey() {
@@ -156,11 +156,17 @@ async function decryptDriver(raw) {
     return;
   }
 
-  // Check for WebAuthn credential
+  // Check for WebAuthn credential — auto-attempt on load, show button as fallback
   const savedCredId = localStorage.getItem(BIO_CRED_KEY);
   if (savedCredId && window.PublicKeyCredential) {
     btnBio.style.display = 'flex';
     btnBio.addEventListener('click', attemptBiometric);
+    // Auto-trigger biometric silently after a short delay
+    setTimeout(function() {
+      attemptBiometric().catch(function() {
+        // Silently fail — user can tap the button manually
+      });
+    }, 400);
   }
 
   btnKey.addEventListener('click', tryAccessKey);
@@ -358,26 +364,91 @@ function initApp() {
     return s;
   }
 
-  // ── Phone group: Call + Text buttons ────────────────────────
+  // ── Phone action sheet (tap on primary number) ──────────────
+  function showPhoneActionSheet(digits) {
+    const existing = document.getElementById('phoneActionSheet');
+    if (existing) existing.remove();
+
+    const sheet = document.createElement('div');
+    sheet.id = 'phoneActionSheet';
+    sheet.style.cssText = [
+      'position:fixed;inset:0;z-index:9000;',
+      'display:flex;align-items:flex-end;justify-content:center;',
+      'background:rgba(53,28,21,0.45);backdrop-filter:blur(3px);',
+    ].join('');
+
+    const box = document.createElement('div');
+    box.style.cssText = [
+      'background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 36px;',
+      'width:100%;max-width:420px;box-shadow:0 -4px 24px rgba(53,28,21,0.18);',
+      'display:flex;flex-direction:column;gap:10px;',
+    ].join('');
+
+    const num = document.createElement('p');
+    num.style.cssText = 'text-align:center;font-size:18px;font-weight:700;color:#351C15;margin-bottom:4px;';
+    num.textContent = formatPhone(digits);
+    box.appendChild(num);
+
+    const callBtn = document.createElement('a');
+    callBtn.href = 'tel:+1' + digits;
+    callBtn.style.cssText = [
+      'display:flex;align-items:center;justify-content:center;gap:10px;',
+      'padding:14px;border-radius:12px;background:#FFB500;color:#1e0f0b;',
+      'font-size:16px;font-weight:800;text-decoration:none;',
+    ].join('');
+    callBtn.innerHTML = '📞 Call';
+    box.appendChild(callBtn);
+
+    const textBtn = document.createElement('a');
+    textBtn.href = 'sms:+1' + digits;
+    textBtn.style.cssText = [
+      'display:flex;align-items:center;justify-content:center;gap:10px;',
+      'padding:14px;border-radius:12px;background:#f5ede8;color:#351C15;',
+      'font-size:16px;font-weight:700;text-decoration:none;border:1.5px solid #e5d5cc;',
+    ].join('');
+    textBtn.innerHTML = '💬 Text';
+    box.appendChild(textBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = [
+      'padding:13px;border-radius:12px;border:1.5px solid #e5d5cc;',
+      'background:#fff;color:#7a6055;font-size:15px;font-weight:600;cursor:pointer;',
+    ].join('');
+    cancelBtn.addEventListener('click', function() { sheet.remove(); });
+    box.appendChild(cancelBtn);
+
+    sheet.appendChild(box);
+    sheet.addEventListener('click', function(e) { if (e.target === sheet) sheet.remove(); });
+    document.body.appendChild(sheet);
+  }
+
+  // ── Phone group: plain text for primary, call-only for alt ──
   function makePhoneGroup(digits, isPrimary) {
     const wrap = document.createElement('div');
     wrap.className = 'phone-group';
 
-    const callA = document.createElement('a');
-    callA.href = 'tel:+1' + digits;
-    callA.className = 'phone-btn ' + (isPrimary ? 'call-primary' : 'call-alt');
-    callA.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
-      + '<span class="phone-number">' + formatPhone(digits) + '</span>'
-      + (!isPrimary ? '<span class="alt-tag">Alt</span>' : '');
-
-    const textA = document.createElement('a');
-    textA.href = 'sms:+1' + digits;
-    textA.className = 'phone-btn ' + (isPrimary ? 'text-primary' : 'text-alt');
-    textA.innerHTML = '<span class="phone-icon" aria-hidden="true">💬</span>'
-      + '<span class="phone-number">Text</span>';
-
-    wrap.appendChild(callA);
-    wrap.appendChild(textA);
+    if (isPrimary) {
+      // Tappable plain number — opens action sheet
+      const numBtn = document.createElement('button');
+      numBtn.className = 'phone-btn phone-plain-primary';
+      numBtn.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
+        + '<span class="phone-number">' + formatPhone(digits) + '</span>';
+      numBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showPhoneActionSheet(digits);
+      });
+      wrap.appendChild(numBtn);
+    } else {
+      // Alt: direct call link, no text button
+      const callA = document.createElement('a');
+      callA.href = 'tel:+1' + digits;
+      callA.className = 'phone-btn call-alt';
+      callA.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
+        + '<span class="phone-number">' + formatPhone(digits) + '</span>'
+        + '<span class="alt-tag">Alt</span>';
+      wrap.appendChild(callA);
+    }
     return wrap;
   }
 
@@ -888,26 +959,23 @@ function initApp() {
     return drivers;
   }
 
-  // ── Scan for duplicates ───────────────────────────────────────
+  // ── Scan for duplicates (by name, not number) ────────────────
   function scanDuplicates() {
-    const phoneMap = new Map(); // phone → [key, ...]
+    // Normalize a name for comparison: lowercase, strip punctuation/spaces
+    function normName(last, first) {
+      return (last + ',' + first).toLowerCase().replace(/[^a-z,]/g, '');
+    }
+
+    const nameMap = new Map(); // normalisedName → [key, ...]
     driverMap.forEach(function(driver, key) {
-      if (driver.phone && driver.phone.digits) {
-        const p = driver.phone.digits;
-        if (!phoneMap.has(p)) phoneMap.set(p, []);
-        phoneMap.get(p).push(key);
-      }
-      if (driver.altPhone && driver.altPhone.digits) {
-        const p = driver.altPhone.digits;
-        if (!phoneMap.has(p)) phoneMap.set(p, []);
-        phoneMap.get(p).push(key);
-      }
+      const norm = normName(driver.lastName, driver.firstName);
+      if (!nameMap.has(norm)) nameMap.set(norm, []);
+      nameMap.get(norm).push(key);
     });
 
     const dupGroups = [];
-    phoneMap.forEach(function(keys, phone) {
-      const unique = [...new Set(keys)];
-      if (unique.length > 1) dupGroups.push({ phone, keys: unique });
+    nameMap.forEach(function(keys, norm) {
+      if (keys.length > 1) dupGroups.push({ norm, keys });
     });
 
     return dupGroups;
@@ -919,14 +987,16 @@ function initApp() {
     window.__dupKeysToDelete = [];
 
     if (groups.length === 0) {
-      dupResults.innerHTML = '<p style="color:#166534;text-align:center;padding:16px;">✅ No duplicates found!</p>';
+      dupResults.innerHTML = '<p style="color:#166534;text-align:center;padding:16px;">✅ No duplicate names found!</p>';
       dupDeleteAll.style.display = 'none';
     } else {
       dupDeleteAll.style.display = 'block';
       groups.forEach(function(g) {
         const block = document.createElement('div');
         block.style.cssText = 'margin-bottom:12px;padding:8px;background:#fef9c3;border-radius:8px;border:1px solid #ca8a04;';
-        block.innerHTML = '<p style="font-size:11px;font-weight:700;color:#ca8a04;margin-bottom:4px;">Shared phone: ' + formatPhone(g.phone) + '</p>';
+        const firstDriver = driverMap.get(g.keys[0]);
+        const displayName = firstDriver ? firstDriver.lastName + ', ' + firstDriver.firstName : g.norm;
+        block.innerHTML = '<p style="font-size:11px;font-weight:700;color:#ca8a04;margin-bottom:4px;">Duplicate name: ' + displayName + '</p>';
         g.keys.forEach(function(key, i) {
           const d = driverMap.get(key);
           if (!d) return;
@@ -941,7 +1011,8 @@ function initApp() {
             else window.__dupKeysToDelete = window.__dupKeysToDelete.filter(k => k !== key);
           });
           const label = document.createElement('span');
-          label.textContent = d.lastName + ', ' + d.firstName + ' — ' + slicLabel(d.location);
+          const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
+          label.textContent = d.lastName + ', ' + d.firstName + ' — ' + slicLabel(d.location) + ' — ' + phone;
           row.appendChild(cb);
           row.appendChild(label);
           block.appendChild(row);
@@ -1166,7 +1237,6 @@ function initApp() {
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
-  document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
   if (localStorage.getItem('dcl_admin') === '1') {

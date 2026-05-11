@@ -42,7 +42,7 @@ body {
 .access-gate {
   position: fixed;
   inset: 0;
-  background: var(--brown);
+  background: var(--bg);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -344,6 +344,19 @@ body {
 .phone-btn.text-primary { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
 .phone-btn.call-alt  { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
 .phone-btn.text-alt  { background: var(--bg); color: var(--brown-mid); border: 1px solid var(--border); }
+/* Plain primary: looks like text but tappable */
+.phone-btn.phone-plain-primary {
+  background: transparent;
+  color: var(--brown);
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  cursor: pointer;
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
 
 .phone-icon  { font-size: 13px; flex-shrink: 0; }
 .phone-number { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
