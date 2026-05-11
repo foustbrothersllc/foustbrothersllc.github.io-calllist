@@ -739,22 +739,19 @@ let isAdmin = false;
   console.log('Attempting anonymous sign in...');
   signInAnonymously(auth).then(function(userCredential) {
     console.log('Signed in anonymously:', userCredential.user.uid);
-    console.log('Starting Firestore listener...');
-    return onSnapshot(driversCol, function(snapshot) {
-      console.log('Snapshot received, docs:', snapshot.size);
-      removeLoadingMsg();
-      const drivers = [];
-      snapshot.forEach(function(d) { drivers.push(d.data()); });
-      drivers.sort(function(a, b) {
-        const ka = (a.lastName + a.firstName).toLowerCase();
-        const kb = (b.lastName + b.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      renderCards(drivers);
-    }, function(err) {
-      removeLoadingMsg();
-      console.error('Snapshot error:', err);
+    console.log('Fetching drivers...');
+    return getDocs(driversCol);
+  }).then(function(snapshot) {
+    console.log('Snapshot received, docs:', snapshot.size);
+    removeLoadingMsg();
+    const drivers = [];
+    snapshot.forEach(function(d) { drivers.push(d.data()); });
+    drivers.sort(function(a, b) {
+      const ka = (a.lastName + a.firstName).toLowerCase();
+      const kb = (b.lastName + b.firstName).toLowerCase();
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
+    renderCards(drivers);
   }).catch(function(err) {
     removeLoadingMsg();
     const p = document.createElement('p');
