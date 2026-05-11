@@ -42,7 +42,7 @@ body {
 .access-gate {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: var(--brown);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -344,15 +344,15 @@ body {
 .phone-btn.text-primary { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
 .phone-btn.call-alt  { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
 .phone-btn.text-alt  { background: var(--bg); color: var(--brown-mid); border: 1px solid var(--border); }
-/* Plain primary: looks like text but tappable */
+/* Plain primary: gold pill, tappable → opens Call/Text sheet */
 .phone-btn.phone-plain-primary {
-  background: transparent;
-  color: var(--brown);
-  border: 1.5px solid var(--border);
+  background: var(--gold);
+  color: var(--brown-dark);
+  border: none;
   font-size: 13px;
-  font-weight: 600;
-  justify-content: flex-start;
-  padding: 8px 10px;
+  font-weight: 700;
+  justify-content: center;
+  padding: 9px 8px;
   cursor: pointer;
   width: 100%;
   border-radius: var(--radius-sm);
