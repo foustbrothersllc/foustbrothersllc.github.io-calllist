@@ -138,6 +138,9 @@ async function decryptDriver(raw) {
   return d;
 }
 
+// ── isAdmin must be declared before the gate IIFE calls initApp ──
+let isAdmin = false;
+
 // ── Access gate ──────────────────────────────────────────────
 (function initAccessGate() {
   const gate       = document.getElementById('accessGate');
@@ -248,7 +251,6 @@ async function decryptDriver(raw) {
 })();
 
 // ── Main App ─────────────────────────────────────────────────
-let isAdmin = false;
 
 function initApp() {
   'use strict';
