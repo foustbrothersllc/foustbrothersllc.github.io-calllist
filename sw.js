@@ -4,7 +4,7 @@
    Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v2';
+const CACHE_NAME = 'driver-call-list-v3';
 
 const APP_SHELL = [
   '/',
@@ -45,11 +45,9 @@ self.addEventListener('activate', function(event) {
 });
 
 // Fetch — network first, fall back to cache
-// Firebase/Firestore API calls always go network-only (never cache live data)
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Firebase API calls — let them fail naturally if offline
   if (url.includes('firestore.googleapis.com') ||
       url.includes('firebase') ||
       url.includes('google.com/identitytoolkit') ||
@@ -57,22 +55,22 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // For app shell files: network first, cache fallback
+  const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
+  const cleanRequest = cleanUrl !== url ? new Request(cleanUrl, { mode: 'same-origin' }) : event.request;
+
   event.respondWith(
     fetch(event.request)
       .then(function(response) {
-        // Cache a fresh copy on each successful network response
         if (response && response.status === 200 && response.type !== 'opaque') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(event.request, clone);
+            cache.put(cleanRequest, clone);
           });
         }
         return response;
       })
       .catch(function() {
-        // Network failed — serve from cache
-        return caches.match(event.request).then(function(cached) {
+        return caches.match(cleanRequest).then(function(cached) {
           return cached || caches.match('/index.html');
         });
       })
