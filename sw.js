@@ -4,14 +4,13 @@
    Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v4';
+const CACHE_NAME = 'driver-call-list-v3';
 
 const APP_SHELL = [
   '/',
   '/index.html',
   '/app.js',
   '/styles.css',
-  '/manifest.json',
   '/apple-touch-icon.png',
   '/favicon.ico',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs',
