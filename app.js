@@ -47,6 +47,9 @@ const db           = initializeFirestore(firebaseApp, {
 const driversCol   = collection(db, 'drivers');
 
 // ── Access & Admin keys ──────────────────────────────────────
+// ⚠️  SECURITY: Keep this GitHub repo PRIVATE — these keys are visible in source.
+// Firebase API keys are safe in client code provided Firestore security rules are locked down.
+// Access/admin passwords should never be in a public repo.
 const ACCESS_KEY    = 'UPSFeederDriver';
 const ADMIN_PASSWORD = 'UPSFounded1907';
 
@@ -508,9 +511,10 @@ function initApp() {
       if (driver.altPhone && driver.altPhone.digits)   phones.appendChild(makePhoneGroup(driver.altPhone.digits, false));
       card.appendChild(phones);
     } else {
-      const none = document.createElement('span');
-      none.className = 'no-phone';
-      none.textContent = 'No phone listed';
+      const none = document.createElement('div');
+      none.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fee2e2;border-radius:8px;border-left:3px solid #b91c1c;';
+      none.innerHTML = '<span style="font-size:16px;">⚠️</span><span style="font-size:12px;font-weight:700;color:#b91c1c;">No phone number on file</span>';
+      card.style.borderLeftColor = '#b91c1c';
       card.appendChild(none);
     }
 
@@ -1139,6 +1143,11 @@ function initApp() {
 
   // ── Seed DB from drivers.json ────────────────────────────────
   async function manualSeed() {
+    const pw = prompt('Enter Seed DB confirmation password:');
+    if (pw !== 'GRENC2749') {
+      if (pw !== null) alert('❌ Incorrect password. Seed cancelled.');
+      return;
+    }
     const btn = document.getElementById('btnSeedDb');
     btn.textContent = '⏳ Seeding…';
     btn.disabled = true;
