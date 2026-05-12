@@ -1394,16 +1394,12 @@ function initApp() {
   if (!navigator.onLine) showOfflineBanner();
 
   // ── Pull-to-refresh (iOS standalone PWA safe) ────────────────
-  // window.location.reload() is unreliable in iOS home-screen PWA mode.
-  // Instead we navigate to '?r=<timestamp>' which forces a full reload
-  // even in standalone mode, then the SW serves the cached shell.
   (function setupPullToRefresh() {
     const isStandalone = window.navigator.standalone === true
       || window.matchMedia('(display-mode: standalone)').matches;
 
     function doRefresh() {
       if (isStandalone) {
-        // iOS PWA: navigate to a cache-busted URL; SW will serve from cache
         window.location.href = window.location.pathname + '?r=' + Date.now();
       } else {
         window.location.reload(true);
@@ -1411,7 +1407,8 @@ function initApp() {
     }
 
     let startY = 0;
-    let pulling = false;
+    let currentY = 0;
+    let active = false;
     let indicator = null;
 
     function getIndicator() {
@@ -1420,11 +1417,12 @@ function initApp() {
         indicator.id = 'ptrIndicator';
         indicator.style.cssText = [
           'position:fixed;top:0;left:0;right:0;z-index:600;',
-          'display:flex;align-items:center;justify-content:center;gap:8px;',
+          'display:flex;align-items:center;justify-content:center;',
           'background:#351C15;color:#FFB500;',
           'font-size:13px;font-weight:700;letter-spacing:0.3px;',
           'padding:10px 16px;',
-          'transform:translateY(-100%);transition:transform 0.2s ease;',
+          'transform:translateY(-100%);',
+          'transition:transform 0.15s ease;',
           'pointer-events:none;'
         ].join('');
         indicator.textContent = '↓ Pull to refresh';
@@ -1433,37 +1431,41 @@ function initApp() {
       return indicator;
     }
 
-    // Listen on the whole document so it works even at scroll top
+    // Use the list element as the scroll container reference
+    // but listen on document so header area pulls also work
     document.addEventListener('touchstart', function(e) {
-      const scrollY = window.scrollY || document.documentElement.scrollTop || listEl.scrollTop;
-      if (scrollY <= 0) {
+      // scrollTop of the page in iOS PWA is on documentElement
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop || 0;
+      if (scrollTop <= 0) {
         startY = e.touches[0].clientY;
-        pulling = true;
+        currentY = startY;
+        active = true;
       }
     }, { passive: true });
 
     document.addEventListener('touchmove', function(e) {
-      if (!pulling) return;
-      const dy = e.touches[0].clientY - startY;
-      if (dy > 10) {
-        const ind = getIndicator();
-        const progress = Math.min(dy / 90, 1);
-        ind.style.transform = 'translateY(' + Math.round((progress * 100) - 100) + '%)';
-        ind.textContent = dy > 75 ? '↑ Release to refresh' : '↓ Pull to refresh';
-      }
+      if (!active) return;
+      currentY = e.touches[0].clientY;
+      const dy = currentY - startY;
+      if (dy <= 0) { active = false; return; }
+      const ind = getIndicator();
+      // Map 0–100px drag to 0–100% reveal
+      const pct = Math.min(dy / 100, 1);
+      ind.style.transform = 'translateY(' + Math.round((pct - 1) * 100) + '%)';
+      ind.textContent = dy > 80 ? '↑ Release to refresh' : '↓ Pull to refresh';
     }, { passive: true });
 
-    document.addEventListener('touchend', function(e) {
-      if (!pulling) return;
-      pulling = false;
+    document.addEventListener('touchend', function() {
+      if (!active) return;
+      active = false;
       const ind = getIndicator();
-      const endY = e.changedTouches[0] ? e.changedTouches[0].clientY : startY;
-      const dy = endY - startY;
+      const dy = currentY - startY;
+      // Snap back
       ind.style.transform = 'translateY(-100%)';
-      if (dy > 75) {
+      if (dy > 80) {
         ind.textContent = '🔄 Refreshing…';
         ind.style.transform = 'translateY(0)';
-        setTimeout(doRefresh, 400);
+        setTimeout(doRefresh, 500);
       }
     }, { passive: true });
   })();
