@@ -1,25 +1,18 @@
 /* ============================================================
    Driver Call List — sw.js
-   Service Worker: caches app shell for offline use.
-   Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v3';
+const CACHE_NAME = 'driver-call-list-v7';
 
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/styles.css',
-  '/apple-touch-icon.png',
-  '/favicon.ico',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs',
-  'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js',
-  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js',
+  'https://foustbrothersllc.github.io/callist/',
+  'https://foustbrothersllc.github.io/callist/index.html',
+  'https://foustbrothersllc.github.io/callist/app.js',
+  'https://foustbrothersllc.github.io/callist/styles.css',
+  'https://foustbrothersllc.github.io/callist/apple-touch-icon.png',
+  'https://foustbrothersllc.github.io/callist/favicon.ico',
 ];
 
-// Install — cache the app shell
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
@@ -30,7 +23,6 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// Activate — delete old caches
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
@@ -44,10 +36,10 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Fetch — network first, fall back to cache
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
+  // Never intercept Firebase
   if (url.includes('firestore.googleapis.com') ||
       url.includes('firebase') ||
       url.includes('google.com/identitytoolkit') ||
@@ -55,9 +47,28 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
-  const cleanRequest = cleanUrl !== url ? new Request(cleanUrl, { mode: 'same-origin' }) : event.request;
+  // Never intercept CDN requests
+  if (url.includes('cdnjs.cloudflare.com') || url.includes('gstatic.com')) {
+    return;
+  }
 
+  // Navigation requests — let network handle, fall back to cached index
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(function() {
+        return caches.match('https://foustbrothersllc.github.io/callist/index.html');
+      })
+    );
+    return;
+  }
+
+  // Strip iOS pull-to-refresh cache-bust param
+  const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
+  const cleanRequest = cleanUrl !== url
+    ? new Request(cleanUrl, { mode: 'same-origin' })
+    : event.request;
+
+  // Network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(function(response) {
@@ -70,9 +81,7 @@ self.addEventListener('fetch', function(event) {
         return response;
       })
       .catch(function() {
-        return caches.match(cleanRequest).then(function(cached) {
-          return cached || caches.match('/index.html');
-        });
+        return caches.match(cleanRequest);
       })
   );
 });
