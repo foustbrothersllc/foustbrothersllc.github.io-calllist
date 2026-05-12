@@ -275,9 +275,6 @@ function initApp() {
   const btnCancel       = document.getElementById('btnCancel');
   const btnSave         = document.getElementById('btnSave');
   const panelNote       = document.getElementById('panelNote');
-  const photoPreview    = document.getElementById('photoPreview');
-  const cameraInput     = document.getElementById('cameraInput');
-  const galleryInput    = document.getElementById('galleryInput');
   const inputLastName   = document.getElementById('inputLastName');
   const inputFirstName  = document.getElementById('inputFirstName');
   const inputLocation   = document.getElementById('inputLocation');
@@ -309,7 +306,6 @@ function initApp() {
   const driverMap         = new Map();
   let editingKey          = null;
   let pendingDeleteKey    = null;
-  let currentPhotoDataUrl = null;
   const selectedKeys      = new Set();
 
   // 3-version import log
@@ -472,7 +468,7 @@ function initApp() {
     outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt, slicLabel(driver.location), driver.location].join(' ').toLowerCase();
     outer.dataset.location = (driver.location || '').toLowerCase();
 
-    // Header: checkbox (admin) + avatar + name + badge
+    // Header: checkbox (admin) + name + badge
     const header = document.createElement('div');
     header.className = 'card-header';
 
@@ -490,19 +486,6 @@ function initApp() {
       });
       header.appendChild(cb);
       if (selectedKeys.has(key)) outer.classList.add('card-selected');
-    }
-
-    if (driver.photo) {
-      const img = document.createElement('img');
-      img.src = driver.photo;
-      img.className = 'card-avatar';
-      img.alt = driver.firstName + ' ' + driver.lastName;
-      header.appendChild(img);
-    } else {
-      const ph = document.createElement('div');
-      ph.className = 'card-avatar-placeholder';
-      ph.textContent = '👤';
-      header.appendChild(ph);
     }
 
     const nameBlock = document.createElement('div');
@@ -718,7 +701,7 @@ function initApp() {
     }
 
     const encrypted = await encryptDriver(driver);
-    setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted).catch(console.error);
+    await setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted); // throws on failure — caught by saveDriver
     addWrites(1);
     applyFilter();
   }
@@ -741,27 +724,7 @@ function initApp() {
     updateCount(visible);
   }
 
-  // ── Photo input ──────────────────────────────────────────────
-  function handlePhotoFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      currentPhotoDataUrl = e.target.result;
-      photoPreview.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = currentPhotoDataUrl;
-      photoPreview.appendChild(img);
-    };
-    reader.readAsDataURL(file);
-  }
-  cameraInput.addEventListener('change', function() { handlePhotoFile(this.files[0]); });
-  galleryInput.addEventListener('change', function() { handlePhotoFile(this.files[0]); });
-
   // ── Panel helpers ────────────────────────────────────────────
-  function resetPhotoPreview() {
-    currentPhotoDataUrl = null;
-    photoPreview.innerHTML = '<span class="photo-placeholder">👤</span>';
-  }
   function openAddPanel() {
     editingKey = null;
     addPanelTitle.textContent = 'Add Driver';
@@ -770,7 +733,6 @@ function initApp() {
     inputLocation.value = 'Greensboro';
     inputPhone.value = ''; inputAltPhone.value = '';
     panelNote.textContent = '';
-    resetPhotoPreview();
     showPanel();
   }
   function openEditPanel(key) {
@@ -785,15 +747,6 @@ function initApp() {
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
-    if (driver.photo) {
-      currentPhotoDataUrl = driver.photo;
-      photoPreview.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = driver.photo;
-      photoPreview.appendChild(img);
-    } else {
-      resetPhotoPreview();
-    }
     showPanel();
   }
   function showPanel() {
@@ -810,13 +763,13 @@ function initApp() {
   async function saveDriver() {
     const lastName  = inputLastName.value.trim();
     const firstName = inputFirstName.value.trim();
-    if (!lastName || !firstName) { panelNote.textContent = '⚠️ First and last name are required.'; return; }
+    if (!lastName || !firstName) { alert('⚠️ First and last name are required.'); panelNote.textContent = '⚠️ First and last name are required.'; return; }
     const rawPhone       = inputPhone.value.trim();
     const rawAltPhone    = inputAltPhone.value.trim();
     const phoneDigits    = normalisePhone(rawPhone);
     const altPhoneDigits = normalisePhone(rawAltPhone);
-    if (rawPhone && !phoneDigits)    { panelNote.textContent = '⚠️ Primary phone needs at least 10 digits.'; return; }
-    if (rawAltPhone && !altPhoneDigits) { panelNote.textContent = '⚠️ Alt phone needs at least 10 digits.'; return; }
+    if (rawPhone && !phoneDigits)    { alert('⚠️ Primary phone needs at least 10 digits.'); panelNote.textContent = '⚠️ Primary phone needs at least 10 digits.'; return; }
+    if (rawAltPhone && !altPhoneDigits) { alert('⚠️ Alt phone needs at least 10 digits.'); panelNote.textContent = '⚠️ Alt phone needs at least 10 digits.'; return; }
 
     const newKey = driverKey(lastName, firstName);
     const isNew  = !driverSet.has(newKey);
@@ -838,13 +791,24 @@ function initApp() {
       location: normaliseSlic(inputLocation.value),
       phone:    phoneDigits    ? { digits: phoneDigits,    display: formatPhone(phoneDigits) }    : null,
       altPhone: altPhoneDigits ? { digits: altPhoneDigits, display: formatPhone(altPhoneDigits) } : null,
-      photo:    currentPhotoDataUrl || (editingKey ? (driverMap.get(editingKey) || {}).photo : null) || null,
     };
 
-    await upsertDriver(driver);
-    panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
-    setTimeout(closePanel, 600);
+    try {
+      btnSave.disabled = true;
+      btnSave.textContent = 'Saving…';
+      await upsertDriver(driver);
+      panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
+      setTimeout(closePanel, 600);
+    } catch (err) {
+      panelNote.textContent = '❌ Save failed.';
+      alert('❌ Save failed: ' + err.message);
+      console.error('saveDriver error:', err);
+    } finally {
+      btnSave.disabled = false;
+      btnSave.textContent = editingKey ? 'Update Driver' : 'Save Driver';
+    }
   }
+
 
   // ── Daily write counter ───────────────────────────────────────
   const WRITE_COUNT_KEY  = 'dcl_write_count';
