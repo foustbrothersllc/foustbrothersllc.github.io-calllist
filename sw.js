@@ -4,7 +4,7 @@
    Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v1';
+const CACHE_NAME = 'driver-call-list-v2';
 
 const APP_SHELL = [
   '/',

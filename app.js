@@ -24,7 +24,9 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 import {
   getFirestore, collection, doc,
   setDoc, deleteDoc, getDocs,
-  initializeFirestore
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ── Firebase config ──────────────────────────────────────────
@@ -40,9 +42,10 @@ const firebaseConfig = {
 
 const firebaseApp  = initializeApp(firebaseConfig);
 const auth         = getAuth(firebaseApp);
+// persistentLocalCache stores all Firestore docs on-device (IndexedDB).
+// getDocs() will serve cached data immediately when offline.
 const db           = initializeFirestore(firebaseApp, {
-  experimentalForceLongPolling: true,
-  useFetchStreams: false
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const driversCol   = collection(db, 'drivers');
 
@@ -1390,6 +1393,64 @@ function initApp() {
   window.addEventListener('offline', showOfflineBanner);
   if (!navigator.onLine) showOfflineBanner();
 
+  // ── Pull-to-refresh (iOS Safari doesn't support native PTR on fixed layouts) ──
+  (function setupPullToRefresh() {
+    let startY = 0;
+    let pulling = false;
+    let indicator = null;
+
+    function getIndicator() {
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'ptrIndicator';
+        indicator.style.cssText = [
+          'position:fixed;top:0;left:0;right:0;z-index:600;',
+          'display:flex;align-items:center;justify-content:center;gap:8px;',
+          'background:var(--brown);color:var(--gold);',
+          'font-size:13px;font-weight:700;letter-spacing:0.3px;',
+          'padding:10px 16px;',
+          'transform:translateY(-100%);transition:transform 0.2s ease;',
+          'pointer-events:none;'
+        ].join('');
+        indicator.textContent = '↓ Pull to refresh';
+        document.body.prepend(indicator);
+      }
+      return indicator;
+    }
+
+    listEl.addEventListener('touchstart', function(e) {
+      // Only trigger when scrolled to very top
+      if (listEl.scrollTop === 0 || document.documentElement.scrollTop === 0) {
+        startY = e.touches[0].clientY;
+        pulling = true;
+      }
+    }, { passive: true });
+
+    listEl.addEventListener('touchmove', function(e) {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10) {
+        const ind = getIndicator();
+        const progress = Math.min(dy / 80, 1);
+        ind.style.transform = 'translateY(' + (progress * 100 - 100) + '%)';
+        ind.textContent = dy > 70 ? '↑ Release to refresh' : '↓ Pull to refresh';
+      }
+    }, { passive: true });
+
+    listEl.addEventListener('touchend', function(e) {
+      if (!pulling) return;
+      pulling = false;
+      const ind = getIndicator();
+      const dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : startY) - startY;
+      ind.style.transform = 'translateY(-100%)';
+      if (dy > 70) {
+        ind.textContent = '🔄 Refreshing…';
+        ind.style.transform = 'translateY(0)';
+        setTimeout(function() { window.location.reload(); }, 400);
+      }
+    }, { passive: true });
+  })();
+
   signInAnonymously(auth).then(async function(userCredential) {
     const snapshot = await getDocs(driversCol);
     removeLoadingMsg();
@@ -1404,17 +1465,39 @@ function initApp() {
       const kb = (b.lastName + b.firstName).toLowerCase();
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
+    // If we got data from cache while offline, show the offline banner
+    if (!navigator.onLine && drivers.length > 0) showOfflineBanner();
     renderCards(drivers);
-  }).catch(function(err) {
+  }).catch(async function(err) {
+    // signInAnonymously failed — try getDocs anyway (persistent cache may still work)
+    try {
+      const snapshot = await getDocs(driversCol);
+      removeLoadingMsg();
+      const drivers = [];
+      for (const d of snapshot.docs) {
+        const decrypted = await decryptDriver(d.data());
+        drivers.push(decrypted);
+      }
+      drivers.sort(function(a, b) {
+        const ka = (a.lastName + a.firstName).toLowerCase();
+        const kb = (b.lastName + b.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      if (drivers.length > 0) {
+        showOfflineBanner();
+        renderCards(drivers);
+        return;
+      }
+    } catch(_) { /* fall through to error display */ }
+
     removeLoadingMsg();
     showOfflineBanner();
     console.error(err);
-    // If we have cached cards already rendered (from SW), don't blank the screen
     if (allCards.length === 0) {
       const p = document.createElement('div');
       p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
       p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
-        + '<p style="font-size:13px;color:#7a1a1a;margin:0;">Check your connection and pull down to refresh. If this keeps happening, Firebase may be temporarily unavailable.</p>';
+        + '<p style="font-size:13px;color:#7a1a1a;margin:0;">No cached data available. Connect to the internet and pull down to refresh.</p>';
       listEl.insertBefore(p, noResults);
     }
   });
