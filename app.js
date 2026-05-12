@@ -1053,65 +1053,56 @@ function initApp() {
     return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  // ── Scan for duplicates (by name, not number) ────────────────
-  function scanDuplicates() {
-    // Normalize a name for comparison: lowercase, strip punctuation/spaces
-    function normName(last, first) {
-      return (last + ',' + first).toLowerCase().replace(/[^a-z,]/g, '');
-    }
-
-    const nameMap = new Map(); // normalisedName → [key, ...]
-    driverMap.forEach(function(driver, key) {
-      const norm = normName(driver.lastName, driver.firstName);
-      if (!nameMap.has(norm)) nameMap.set(norm, []);
-      nameMap.get(norm).push(key);
-    });
-
-    const dupGroups = [];
-    nameMap.forEach(function(keys, norm) {
-      if (keys.length > 1) dupGroups.push({ norm, keys });
-    });
-
-    return dupGroups;
-  }
 
   function openDupModal() {
-    const groups = scanDuplicates();
     dupResults.innerHTML = '';
-    window.__dupKeysToDelete = [];
+    window.__retiredKeysToDelete = [];
 
-    if (groups.length === 0) {
-      dupResults.innerHTML = '<p style="color:#166534;text-align:center;padding:16px;">✅ No duplicate names found!</p>';
+    const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
+    if (!meta) {
+      dupResults.innerHTML = '<p style="color:#5a3525;text-align:center;padding:16px;">No import on record yet.<br>Run an import first.</p>';
+      dupDeleteAll.style.display = 'none';
+      dupModal.classList.add('open');
+      return;
+    }
+
+    const importedIds = new Set(meta.grencIds || []);
+    const possibly = [];
+    driverMap.forEach(function(d, key) {
+      if ((d.location || '').toLowerCase() !== 'greensboro') return; // skip MEBNC
+      const docId = keyToDocId(key);
+      if (!importedIds.has(docId)) possibly.push({ key, d });
+    });
+
+    if (possibly.length === 0) {
+      dupResults.innerHTML = '<p style="color:#166534;text-align:center;padding:16px;">✅ All GRENC drivers were on the last import.</p>';
       dupDeleteAll.style.display = 'none';
     } else {
       dupDeleteAll.style.display = 'block';
-      groups.forEach(function(g) {
-        const block = document.createElement('div');
-        block.style.cssText = 'margin-bottom:12px;padding:8px;background:#fef9c3;border-radius:8px;border:1px solid #ca8a04;';
-        const firstDriver = driverMap.get(g.keys[0]);
-        const displayName = firstDriver ? firstDriver.lastName + ', ' + firstDriver.firstName : g.norm;
-        block.innerHTML = '<p style="font-size:11px;font-weight:700;color:#ca8a04;margin-bottom:4px;">Duplicate name: ' + displayName + '</p>';
-        g.keys.forEach(function(key, i) {
-          const d = driverMap.get(key);
-          if (!d) return;
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.style.accentColor = '#b91c1c';
-          if (i > 0) { cb.checked = true; window.__dupKeysToDelete.push(key); }
-          cb.addEventListener('change', function() {
-            if (cb.checked) window.__dupKeysToDelete.push(key);
-            else window.__dupKeysToDelete = window.__dupKeysToDelete.filter(k => k !== key);
-          });
-          const label = document.createElement('span');
-          const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
-          label.textContent = d.lastName + ', ' + d.firstName + ' — ' + slicLabel(d.location) + ' — ' + phone;
-          row.appendChild(cb);
-          row.appendChild(label);
-          block.appendChild(row);
+      const header = document.createElement('p');
+      header.style.cssText = 'font-size:11px;color:#5a3525;margin-bottom:10px;';
+      header.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
+      dupResults.appendChild(header);
+
+      possibly.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #e5d5cc;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
         });
-        dupResults.appendChild(block);
+        const label = document.createElement('span');
+        const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
+        label.style.cssText = 'font-size:13px;color:#351C15;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
       });
     }
     dupModal.classList.add('open');
@@ -1119,7 +1110,7 @@ function initApp() {
 
   dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
   dupDeleteAll.addEventListener('click', function() {
-    const keys = window.__dupKeysToDelete || [];
+    const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
     keys.forEach(function(key) {
       const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
@@ -1250,12 +1241,23 @@ function initApp() {
       return;
     }
 
-    const toDelete = [];
-    snapshot.forEach(function(d) { if (!incomingMap.has(d.id)) toDelete.push(d.id); });
-
-    const total   = incomingMap.size;
-    const removed = toDelete.length;
+    const total = incomingMap.size;
     let done = 0;
+
+    // Track which GRENC doc IDs were in this import (for Possibly Retired check)
+    const importedGrencIds = new Set();
+    newDrivers.forEach(function(d) {
+      if (normaliseSlic(d.location).toLowerCase() === 'greensboro') {
+        importedGrencIds.add(keyToDocId(driverKey(d.lastName, d.firstName)));
+      }
+    });
+    // Save to localStorage so Possibly Retired button can use it
+    const lastImportMeta = {
+      date: new Date().toLocaleString(),
+      file: file.name,
+      grencIds: Array.from(importedGrencIds)
+    };
+    localStorage.setItem('dcl_last_import', JSON.stringify(lastImportMeta));
 
     setProgress(50, 'Uploading ' + total + ' drivers…');
     importStatus.textContent = 'Uploading ' + total + ' drivers…';
@@ -1275,22 +1277,15 @@ function initApp() {
         addWrites(batch.length);
       }
 
-      if (toDelete.length > 0) {
-        setProgress(92, 'Removing ' + removed + ' old drivers…');
-        importStatus.textContent = 'Removing ' + removed + ' old drivers…';
-        await Promise.all(toDelete.map(id => deleteDoc(doc(db, 'drivers', id))));
-      }
-
       setProgress(100, 'Done!');
-      importStatus.textContent = '✅ Done! ' + total + ' imported, ' + removed + ' removed.';
+      importStatus.textContent = '✅ Done! ' + total + ' imported.';
       importConfirm.textContent = 'Import';
 
       // Save update log entry
       const logEntry = {
-        date:    new Date().toLocaleString(),
-        file:    file.name,
-        added:   total,
-        removed: removed
+        date:  new Date().toLocaleString(),
+        file:  file.name,
+        added: total,
       };
       pushUpdateLog(logEntry);
 
@@ -1301,7 +1296,7 @@ function initApp() {
       allLogs.forEach(function(e) {
         const row = document.createElement('div');
         row.style.cssText = 'font-size:11px;color:#5a3525;padding:3px 0;border-bottom:1px solid #e5d5cc;';
-        row.textContent = e.date + ' — ' + e.file + ': +' + e.added + ' / -' + e.removed;
+        row.textContent = e.date + ' — ' + e.file + ': ' + e.added + ' imported';
         importLogEntries.appendChild(row);
       });
 

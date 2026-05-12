@@ -84,7 +84,7 @@
       <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
-        <button id="btnScanDups"  class="btn-admin">🔍 Scan Dups</button>
+        <button id="btnScanDups"  class="btn-admin">🔍 Possibly Retired</button>
         <button id="btnAdminLogout" class="btn-admin btn-admin-danger">🔓 Log Out</button>
       </div>
     </header>
@@ -187,12 +187,12 @@
     <!-- Duplicate Scan Modal -->
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
-        <div class="modal-icon">🔍</div>
-        <h2 class="modal-title">Duplicate Scan</h2>
+        <div class="modal-icon">👴</div>
+        <h2 class="modal-title">Possibly Retired</h2>
         <div id="dupResults" style="max-height:300px;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;"></div>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="dupClose">Close</button>
-          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Delete Flagged</button>
+          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
         </div>
       </div>
     </div>
