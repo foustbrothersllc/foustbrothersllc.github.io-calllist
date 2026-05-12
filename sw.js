@@ -45,11 +45,9 @@ self.addEventListener('activate', function(event) {
 });
 
 // Fetch — network first, fall back to cache
-// Firebase/Firestore API calls always go network-only (never cache live data)
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Firebase API calls — let them fail naturally if offline
   if (url.includes('firestore.googleapis.com') ||
       url.includes('firebase') ||
       url.includes('google.com/identitytoolkit') ||
@@ -57,16 +55,12 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Strip ?r=<timestamp> cache-bust param added by iOS PWA pull-to-refresh,
-  // so the SW can still match and serve the cached shell file.
   const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
   const cleanRequest = cleanUrl !== url ? new Request(cleanUrl, { mode: 'same-origin' }) : event.request;
 
-  // For app shell files: network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(function(response) {
-        // Cache a fresh copy on each successful network response
         if (response && response.status === 200 && response.type !== 'opaque') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
@@ -76,7 +70,6 @@ self.addEventListener('fetch', function(event) {
         return response;
       })
       .catch(function() {
-        // Network failed — serve from cache (use clean URL for lookup)
         return caches.match(cleanRequest).then(function(cached) {
           return cached || caches.match('/index.html');
         });

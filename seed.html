@@ -55,20 +55,6 @@ function toFirestoreDoc(driver) {
 }
 
 btn.addEventListener('click', async function() {
-  const confirmed = confirm('WARNING: Seeding overwrites records. Continue?');
-  if (!confirmed) return;
-
-  const typed = prompt('Type OVERWRITE to continue.');
-  if (typed !== 'OVERWRITE') {
-    alert('Seed cancelled.');
-    return;
-  }
-
-  const password = prompt('Enter admin password');
-  if (password !== 'UPSFounded1907') {
-    alert('Incorrect password.');
-    return;
-  }
   btn.disabled = true;
   log.textContent = '';
   addLog('Fetching drivers.json...');
