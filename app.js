@@ -881,6 +881,7 @@ function initApp() {
     fabAdd.style.display = 'flex';
     document.getElementById('adminBar').style.display = 'flex';
     document.getElementById('btnAdminLogin').style.display = 'none';
+    document.getElementById('btnAdminLogoutHeader').style.display = 'flex';
 
     // Inject write counter bar if not already present
     if (false && !document.getElementById('writeCountBar')) {
@@ -908,6 +909,7 @@ function initApp() {
     fabAdd.style.display = 'none';
     document.getElementById('adminBar').style.display = 'none';
     document.getElementById('btnAdminLogin').style.display = 'flex';
+    document.getElementById('btnAdminLogoutHeader').style.display = 'none';
     clearAllSelections();
     const bar = document.getElementById('bulkDeleteBar');
     if (bar) bar.style.display = 'none';
@@ -1349,10 +1351,11 @@ function initApp() {
   btnSave.addEventListener('click', saveDriver);
 
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
-  document.getElementById('btnAdminLogout').addEventListener('click', adminLogout);
+  document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
+  document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
   if (localStorage.getItem('dcl_admin') === '1') {
