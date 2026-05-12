@@ -468,7 +468,7 @@ function initApp() {
 
     const phonePrimary = driver.phone    ? driver.phone.digits    : '';
     const phoneAlt     = driver.altPhone ? driver.altPhone.digits : '';
-    outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt, slicLabel(driver.location), driver.location].join(' ').toLowerCase();
+    outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt].join(' ').toLowerCase();
     outer.dataset.location = (driver.location || '').toLowerCase();
 
     // Header: checkbox (admin) + name + badge
@@ -516,6 +516,14 @@ function initApp() {
       none.innerHTML = '<span style="font-size:16px;">⚠️</span><span style="font-size:12px;font-weight:700;color:#b91c1c;">No phone number on file</span>';
       card.style.borderLeftColor = '#b91c1c';
       card.appendChild(none);
+    }
+
+    // Last updated timestamp
+    if (driver.updatedAt) {
+      const ts = document.createElement('p');
+      ts.style.cssText = 'font-size:10px;color:#7a6055;margin-top:5px;font-style:italic;';
+      ts.textContent = 'Updated: ' + driver.updatedAt;
+      card.appendChild(ts);
     }
 
     // Edit button — admin only
@@ -795,6 +803,7 @@ function initApp() {
       location: normaliseSlic(inputLocation.value),
       phone:    phoneDigits    ? { digits: phoneDigits,    display: formatPhone(phoneDigits) }    : null,
       altPhone: altPhoneDigits ? { digits: altPhoneDigits, display: formatPhone(altPhoneDigits) } : null,
+      updatedAt: new Date().toLocaleString(),
     };
 
     try {
@@ -1362,9 +1371,26 @@ function initApp() {
     if (el) el.remove();
   }
 
+  function showOfflineBanner() {
+    if (document.getElementById('offlineBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'offlineBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:500;background:#b91c1c;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:700;letter-spacing:0.2px;';
+    banner.textContent = '⚠️ Unable to connect — showing cached data. Pull to refresh when signal returns.';
+    document.body.prepend(banner);
+  }
+  function hideOfflineBanner() {
+    const b = document.getElementById('offlineBanner');
+    if (b) b.remove();
+  }
+  window.addEventListener('online',  hideOfflineBanner);
+  window.addEventListener('offline', showOfflineBanner);
+  if (!navigator.onLine) showOfflineBanner();
+
   signInAnonymously(auth).then(async function(userCredential) {
     const snapshot = await getDocs(driversCol);
     removeLoadingMsg();
+    hideOfflineBanner();
     const drivers = [];
     for (const d of snapshot.docs) {
       const decrypted = await decryptDriver(d.data());
@@ -1378,10 +1404,15 @@ function initApp() {
     renderCards(drivers);
   }).catch(function(err) {
     removeLoadingMsg();
-    const p = document.createElement('p');
-    p.style.cssText = 'padding:24px;color:#b91c1c;';
-    p.textContent = 'Error loading drivers: ' + err.message;
-    listEl.insertBefore(p, noResults);
+    showOfflineBanner();
     console.error(err);
+    // If we have cached cards already rendered (from SW), don't blank the screen
+    if (allCards.length === 0) {
+      const p = document.createElement('div');
+      p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
+      p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
+        + '<p style="font-size:13px;color:#7a1a1a;margin:0;">Check your connection and pull down to refresh. If this keeps happening, Firebase may be temporarily unavailable.</p>';
+      listEl.insertBefore(p, noResults);
+    }
   });
 }

@@ -189,7 +189,7 @@
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
         <div class="modal-icon">👴</div>
         <h2 class="modal-title">Possibly Retired</h2>
-        <div id="dupResults" style="max-height:300px;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;"></div>
+        <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="dupClose">Close</button>
           <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
@@ -206,6 +206,28 @@
     </main>
 
   </div><!-- /#appWrapper -->
+
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js').then(function(reg) {
+          reg.addEventListener('updatefound', function() {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                const bar = document.createElement('div');
+                bar.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;background:#351C15;color:#FFB500;border-radius:40px;padding:10px 20px;font-size:13px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,0.3);white-space:nowrap;cursor:pointer;';
+                bar.textContent = '🔄 Update available — tap to refresh';
+                bar.addEventListener('click', function() { window.location.reload(); });
+                document.body.appendChild(bar);
+              }
+            });
+          });
+        });
+      });
+    }
+  </script>
 
   <!-- pdf.js from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
