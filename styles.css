@@ -578,7 +578,15 @@ body {
   #searchBox:focus { background: rgba(255,255,255,0.10); border-color: var(--gold); }
 
   /* Cards */
-  .card { background: #1e1410; border-left-color: var(--gold); }
+  .card { background: #fdf3d0; border-left-color: var(--gold); }
+  .card .name { color: #351C15; }
+  .card .phone-btn.text-primary,
+  .card .phone-btn.call-alt,
+  .card .phone-btn.text-alt { background: #f5e8a0; color: #351C15; border-color: #e0c84a; }
+  .card .alt-tag { background: rgba(53,28,21,0.10); color: #351C15; }
+  .card .no-phone { color: #7a6055; }
+  .card .btn-edit { background: #f0d060; color: #351C15; }
+  .card .card-actions { border-top-color: #e0c84a; }
   .name { color: #f0c060; }
   .card-avatar-placeholder { background: #2a1f18; border-color: #3d2a22; }
   .phone-btn.call-primary { background: var(--gold); color: #1a0800; }
