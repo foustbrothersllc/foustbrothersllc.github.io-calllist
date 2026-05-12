@@ -55,6 +55,8 @@ const driversCol   = collection(db, 'drivers');
 // Access/admin passwords should never be in a public repo.
 const ACCESS_KEY    = 'UPSFeederDriver';
 const ADMIN_PASSWORD = 'UPSFounded1907';
+const LAST_BACKUP_KEY = 'dcl_last_backup';
+const THEME_KEY = 'dcl_theme';
 
 // ── AES-256-GCM encryption helpers ──────────────────────────
 // Key is derived from a fixed passphrase using PBKDF2.
@@ -258,6 +260,7 @@ let isAdmin = false;
   function unlockApp() {
     gate.style.display = 'none';
     appWrapper.style.display = 'block';
+    initTheme();
     initApp();
   }
 
@@ -366,7 +369,7 @@ let isAdmin = false;
         cancelBtn.textContent = 'Close';
         errorEl.textContent = '';
         revealEl.style.display = 'block';
-        keyDisplay.textContent = ACCESS_KEY;
+        keyDisplay.innerHTML = `<div><b>Access Key</b><br>${ACCESS_KEY}</div><br><div><b>Admin Password</b><br>${ADMIN_PASSWORD}</div>`;
       } else {
         // Wrong answer
         const attempts = getRecoveryAttempts() + 1;

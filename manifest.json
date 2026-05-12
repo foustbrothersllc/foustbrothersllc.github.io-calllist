@@ -1,0 +1,8 @@
+{
+  "name": "Driver Call List",
+  "short_name": "Driver List",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#351C15"
+}
