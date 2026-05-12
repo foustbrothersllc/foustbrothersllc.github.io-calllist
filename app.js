@@ -333,6 +333,8 @@ let isAdmin = false;
       <div id="recoveryReveal" style="display:none;margin-top:16px;padding:12px;background:#fff3cc;border-radius:10px;border:1.5px solid #FFB500;">
         <p style="font-size:11px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Your Access Key</p>
         <p id="recoveryKeyDisplay" style="font-size:20px;font-weight:800;color:#351C15;letter-spacing:1px;"></p>
+        <p style="font-size:11px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px;margin-bottom:4px;">Admin Password</p>
+        <p style="font-size:16px;font-weight:800;color:#351C15;letter-spacing:1px;">${ADMIN_PASSWORD}</p>
       </div>
     `;
 
@@ -1033,15 +1035,44 @@ function initApp() {
 
   // ── Admin login ───────────────────────────────────────────────
   function promptAdminLogin() {
-    const pw = prompt('Enter admin password:');
-    if (pw === ADMIN_PASSWORD) {
-      isAdmin = true;
-      localStorage.setItem('dcl_admin', '1');
-      showAdminControls();
-      renderCards(Array.from(driverMap.values()));
-    } else if (pw !== null) {
-      alert('❌ Incorrect password.');
-    }
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(53,28,21,0.65);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:18px;padding:28px 24px 22px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);text-align:center;border-top:4px solid #FFB500;';
+    box.innerHTML = '<div style="font-size:32px;margin-bottom:10px;">\ud83d\udd10</div>'
+      + '<h2 style="font-size:17px;font-weight:800;color:#351C15;margin-bottom:14px;">Admin Login</h2>'
+      + '<input type="password" id="adminPwInput" placeholder="Admin password" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e5d5cc;font-size:16px;outline:none;margin-bottom:8px;text-align:center;-webkit-appearance:none;">'
+      + '<p id="adminPwError" style="font-size:12px;color:#b91c1c;min-height:16px;margin-bottom:12px;font-weight:600;"></p>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button id="adminCancelBtn" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>'
+      + '<button id="adminUnlockBtn" style="flex:2;padding:11px;border-radius:10px;border:none;background:#351C15;color:#FFB500;font-size:14px;font-weight:800;cursor:pointer;">Unlock</button>'
+      + '</div>';
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+
+    const pwInput   = box.querySelector('#adminPwInput');
+    const errorEl   = box.querySelector('#adminPwError');
+    const cancelBtn = box.querySelector('#adminCancelBtn');
+    const unlockBtn = box.querySelector('#adminUnlockBtn');
+
+    setTimeout(function() { pwInput.focus(); }, 200);
+    cancelBtn.addEventListener('click',  function() { backdrop.remove(); });
+    backdrop.addEventListener('click',   function(e) { if (e.target === backdrop) backdrop.remove(); });
+    pwInput.addEventListener('keydown',  function(e) { if (e.key === 'Enter') unlockBtn.click(); });
+
+    unlockBtn.addEventListener('click', function() {
+      if (pwInput.value === ADMIN_PASSWORD) {
+        backdrop.remove();
+        isAdmin = true;
+        localStorage.setItem('dcl_admin', '1');
+        showAdminControls();
+        renderCards(Array.from(driverMap.values()));
+      } else {
+        errorEl.textContent = '\u274c Incorrect password.';
+        pwInput.value = '';
+        pwInput.focus();
+      }
+    });
   }
 
   function showAdminControls() {
@@ -1057,6 +1088,15 @@ function initApp() {
       wb.style.cssText = 'display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.25);border-radius:8px;padding:8px 12px;margin-top:4px;';
       document.getElementById('adminBar').after(wb);
       updateWriteBar();
+    }
+
+    // Inject backup age reminder
+    if (!document.getElementById('backupAgeLabel')) {
+      const lbl = document.createElement('span');
+      lbl.id = 'backupAgeLabel';
+      lbl.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:0.2px;white-space:nowrap;align-self:center;';
+      document.getElementById('adminBar').appendChild(lbl);
+      updateBackupLabel();
     }
 
     if (!document.getElementById('bulkDeleteBar')) {
@@ -1317,15 +1357,65 @@ function initApp() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    // Record backup timestamp for the admin bar reminder
+    localStorage.setItem('dcl_last_backup', String(Date.now()));
+    updateBackupLabel();
   }
 
-  // ── Seed DB from drivers.json ────────────────────────────────
-  async function manualSeed() {
-    const pw = prompt('Enter Seed DB confirmation password:');
-    if (pw !== 'GRENC2749') {
-      if (pw !== null) alert('❌ Incorrect password. Seed cancelled.');
-      return;
-    }
+  function updateBackupLabel() {
+    const el = document.getElementById('backupAgeLabel');
+    if (!el) return;
+    const ts = parseInt(localStorage.getItem('dcl_last_backup') || '0', 10);
+    if (!ts) { el.textContent = '\u26a0\ufe0f No backup on record'; el.style.color = 'rgba(255,150,100,0.9)'; return; }
+    const days = Math.floor((Date.now() - ts) / 86400000);
+    if (days === 0) { el.textContent = '\u2705 Backed up today'; el.style.color = 'rgba(100,255,150,0.85)'; }
+    else if (days === 1) { el.textContent = '\u23f0 Last backup: yesterday'; el.style.color = 'rgba(255,220,80,0.85)'; }
+    else { el.textContent = '\u26a0\ufe0f Last backup: ' + days + ' days ago'; el.style.color = days >= 7 ? 'rgba(255,120,80,0.9)' : 'rgba(255,220,80,0.85)'; }
+  }
+
+  // ── Seed DB confirmation modal ───────────────────────────────
+  function manualSeed() {
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(53,28,21,0.65);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:18px;padding:28px 24px 22px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);text-align:center;border-top:4px solid #b91c1c;';
+    box.innerHTML = '<div style="font-size:32px;margin-bottom:10px;">\u26a0\ufe0f</div>'
+      + '<h2 style="font-size:17px;font-weight:800;color:#b91c1c;margin-bottom:8px;">Seed Database?</h2>'
+      + '<p style="font-size:13px;color:#5a3525;line-height:1.55;margin-bottom:16px;">This will <strong>overwrite every driver record</strong> in Firestore with <code>drivers.json</code>. This cannot be undone.</p>'
+      + '<p style="font-size:12px;color:#7a6055;margin-bottom:14px;">Enter the seed password to confirm:</p>'
+      + '<input type="password" id="seedPwInput" placeholder="Seed password" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e5d5cc;font-size:16px;outline:none;margin-bottom:8px;text-align:center;-webkit-appearance:none;">'
+      + '<p id="seedPwError" style="font-size:12px;color:#b91c1c;min-height:16px;margin-bottom:12px;font-weight:600;"></p>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button id="seedCancelBtn" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>'
+      + '<button id="seedConfirmBtn" style="flex:2;padding:11px;border-radius:10px;border:none;background:#b91c1c;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Yes, Seed DB</button>'
+      + '</div>';
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+
+    const pwInput   = box.querySelector('#seedPwInput');
+    const errorEl   = box.querySelector('#seedPwError');
+    const cancelBtn = box.querySelector('#seedCancelBtn');
+    const confirmBtn= box.querySelector('#seedConfirmBtn');
+
+    setTimeout(function() { pwInput.focus(); }, 200);
+    cancelBtn.addEventListener('click',  function() { backdrop.remove(); });
+    backdrop.addEventListener('click',   function(e) { if (e.target === backdrop) backdrop.remove(); });
+    pwInput.addEventListener('keydown',  function(e) { if (e.key === 'Enter') confirmBtn.click(); });
+
+    confirmBtn.addEventListener('click', function() {
+      if (pwInput.value !== 'GRENC2749') {
+        errorEl.textContent = '\u274c Incorrect password.';
+        pwInput.value = '';
+        pwInput.focus();
+        return;
+      }
+      backdrop.remove();
+      runSeed();
+    });
+  }
+
+  async function runSeed() {
     const btn = document.getElementById('btnSeedDb');
     btn.textContent = '⏳ Seeding…';
     btn.disabled = true;

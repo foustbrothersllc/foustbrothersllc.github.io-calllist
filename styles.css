@@ -532,3 +532,97 @@ body {
   transition: filter 0.1s;
 }
 .btn-delete-confirm:active { filter: brightness(0.88); }
+
+/* ============================================================
+   Dark Mode
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brown:        #f0c060;
+    --brown-dark:   #ffe082;
+    --brown-mid:    #c9a86c;
+    --brown-light:  #2a1f18;
+    --gold:         #FFB500;
+    --gold-dark:    #cc8f00;
+    --gold-light:   #2c2200;
+    --grenc-bg:     #1e3a5f;
+    --grenc-fg:     #93c5fd;
+    --mebnc-bg:     #14391f;
+    --mebnc-fg:     #6ee7a0;
+    --text:         #f0e8e0;
+    --muted:        #a08878;
+    --border:       #3d2a22;
+    --bg:           #1a1008;
+    --white:        #1e1410;
+    --danger:       #f87171;
+    --danger-bg:    #3f1515;
+    --shadow:       0 1px 4px rgba(0,0,0,0.40);
+    --shadow-lg:    0 4px 18px rgba(0,0,0,0.55);
+  }
+
+  body { background: #000; }
+
+  /* Gate card */
+  .gate-card { background: #1e1410; border-top-color: var(--gold); box-shadow: 0 8px 40px rgba(0,0,0,0.7); }
+  .gate-title { color: var(--gold); }
+  .gate-input { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
+  .gate-input:focus { border-color: var(--gold); }
+  .gate-btn { background: #351C15; color: var(--gold); }
+  .gate-bio-btn { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
+  .gate-bio-btn:active { background: #3d2a22; }
+
+  /* Header */
+  .header { background: #1a0e08; border-bottom-color: var(--gold); }
+  #searchBox { background: rgba(255,255,255,0.06); color: #f0e8e0; border-color: rgba(255,181,0,0.3); }
+  #searchBox::placeholder { color: rgba(255,255,255,0.35); }
+  #searchBox:focus { background: rgba(255,255,255,0.10); border-color: var(--gold); }
+
+  /* Cards */
+  .card { background: #1e1410; border-left-color: var(--gold); }
+  .name { color: #f0c060; }
+  .card-avatar-placeholder { background: #2a1f18; border-color: #3d2a22; }
+  .phone-btn.call-primary { background: var(--gold); color: #1a0800; }
+  .phone-btn.text-primary,
+  .phone-btn.call-alt,
+  .phone-btn.text-alt   { background: #2a1f18; color: #d4b896; border-color: #3d2a22; }
+  .phone-btn.phone-plain-primary { background: var(--gold); color: #1a0800; }
+  .alt-tag { background: rgba(255,255,255,0.08); color: #c9a86c; }
+  .no-phone { color: var(--muted); }
+  .btn-edit { background: #2c2200; color: #f0c060; }
+  .card-selected .card { border-left-color: var(--danger); background: var(--danger-bg); }
+  .card-selected .card .name { color: var(--danger); }
+
+  /* Panels */
+  .add-panel { background: #1e1410; }
+  .add-panel-header { background: #1e1410; border-bottom-color: var(--gold); }
+  .add-panel-header span { color: var(--gold); }
+  .panel-close-btn { color: var(--muted); }
+  .field-group label { color: #f0c060; }
+  .field-group input,
+  .field-group select { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
+  .field-group input:focus,
+  .field-group select:focus { border-color: var(--gold); }
+  .btn-cancel { background: #1e1410; color: var(--muted); border-color: #3d2a22; }
+  .btn-save { background: #351C15; color: var(--gold); }
+  .panel-note { color: #c9a86c; }
+  .panel-overlay { background: rgba(0,0,0,0.65); }
+
+  /* Modals */
+  .modal { background: #1e1410; }
+  .modal-title { color: var(--gold); }
+  .modal-body { color: var(--muted); }
+  .btn-modal-cancel { background: #1e1410; color: var(--muted); border-color: #3d2a22; }
+
+  /* Import modal */
+  #importModal .modal { border-top-color: #f0c060; }
+  #importStatus { color: #c9a86c; }
+  #importUpdateLog { background: #2a1f18; color: #f0c060; }
+  #importLogEntries > div { border-bottom-color: #3d2a22; }
+
+  /* No results */
+  #noResults { color: var(--muted); }
+
+  /* Phone action sheet */
+  #phoneActionSheet > div { background: #1e1410; }
+  #phoneActionSheet p { color: var(--gold); }
+}
