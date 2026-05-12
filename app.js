@@ -1393,8 +1393,23 @@ function initApp() {
   window.addEventListener('offline', showOfflineBanner);
   if (!navigator.onLine) showOfflineBanner();
 
-  // ── Pull-to-refresh (iOS Safari doesn't support native PTR on fixed layouts) ──
+  // ── Pull-to-refresh (iOS standalone PWA safe) ────────────────
+  // window.location.reload() is unreliable in iOS home-screen PWA mode.
+  // Instead we navigate to '?r=<timestamp>' which forces a full reload
+  // even in standalone mode, then the SW serves the cached shell.
   (function setupPullToRefresh() {
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+
+    function doRefresh() {
+      if (isStandalone) {
+        // iOS PWA: navigate to a cache-busted URL; SW will serve from cache
+        window.location.href = window.location.pathname + '?r=' + Date.now();
+      } else {
+        window.location.reload(true);
+      }
+    }
+
     let startY = 0;
     let pulling = false;
     let indicator = null;
@@ -1406,7 +1421,7 @@ function initApp() {
         indicator.style.cssText = [
           'position:fixed;top:0;left:0;right:0;z-index:600;',
           'display:flex;align-items:center;justify-content:center;gap:8px;',
-          'background:var(--brown);color:var(--gold);',
+          'background:#351C15;color:#FFB500;',
           'font-size:13px;font-weight:700;letter-spacing:0.3px;',
           'padding:10px 16px;',
           'transform:translateY(-100%);transition:transform 0.2s ease;',
@@ -1418,35 +1433,37 @@ function initApp() {
       return indicator;
     }
 
-    listEl.addEventListener('touchstart', function(e) {
-      // Only trigger when scrolled to very top
-      if (listEl.scrollTop === 0 || document.documentElement.scrollTop === 0) {
+    // Listen on the whole document so it works even at scroll top
+    document.addEventListener('touchstart', function(e) {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || listEl.scrollTop;
+      if (scrollY <= 0) {
         startY = e.touches[0].clientY;
         pulling = true;
       }
     }, { passive: true });
 
-    listEl.addEventListener('touchmove', function(e) {
+    document.addEventListener('touchmove', function(e) {
       if (!pulling) return;
       const dy = e.touches[0].clientY - startY;
       if (dy > 10) {
         const ind = getIndicator();
-        const progress = Math.min(dy / 80, 1);
-        ind.style.transform = 'translateY(' + (progress * 100 - 100) + '%)';
-        ind.textContent = dy > 70 ? '↑ Release to refresh' : '↓ Pull to refresh';
+        const progress = Math.min(dy / 90, 1);
+        ind.style.transform = 'translateY(' + Math.round((progress * 100) - 100) + '%)';
+        ind.textContent = dy > 75 ? '↑ Release to refresh' : '↓ Pull to refresh';
       }
     }, { passive: true });
 
-    listEl.addEventListener('touchend', function(e) {
+    document.addEventListener('touchend', function(e) {
       if (!pulling) return;
       pulling = false;
       const ind = getIndicator();
-      const dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : startY) - startY;
+      const endY = e.changedTouches[0] ? e.changedTouches[0].clientY : startY;
+      const dy = endY - startY;
       ind.style.transform = 'translateY(-100%)';
-      if (dy > 70) {
+      if (dy > 75) {
         ind.textContent = '🔄 Refreshing…';
         ind.style.transform = 'translateY(0)';
-        setTimeout(function() { window.location.reload(); }, 400);
+        setTimeout(doRefresh, 400);
       }
     }, { passive: true });
   })();

@@ -57,6 +57,11 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
+  // Strip ?r=<timestamp> cache-bust param added by iOS PWA pull-to-refresh,
+  // so the SW can still match and serve the cached shell file.
+  const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
+  const cleanRequest = cleanUrl !== url ? new Request(cleanUrl, { mode: 'same-origin' }) : event.request;
+
   // For app shell files: network first, cache fallback
   event.respondWith(
     fetch(event.request)
@@ -65,14 +70,14 @@ self.addEventListener('fetch', function(event) {
         if (response && response.status === 200 && response.type !== 'opaque') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(event.request, clone);
+            cache.put(cleanRequest, clone);
           });
         }
         return response;
       })
       .catch(function() {
-        // Network failed — serve from cache
-        return caches.match(event.request).then(function(cached) {
+        // Network failed — serve from cache (use clean URL for lookup)
+        return caches.match(cleanRequest).then(function(cached) {
           return cached || caches.match('/index.html');
         });
       })
