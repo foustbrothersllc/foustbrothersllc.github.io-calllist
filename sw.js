@@ -1,29 +1,32 @@
 /* ============================================================
    Driver Call List — sw.js
    Service Worker: caches app shell for offline use.
+   Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v6';
-const BASE = '/callist';
+const CACHE_NAME = 'driver-call-list-v2';
 
-const ASSETS = [
-  BASE + '/app.js',
-  BASE + '/styles.css',
-  BASE + '/manifest.json',
-  BASE + '/apple-touch-icon.png',
-  BASE + '/favicon.ico',
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/app.js',
+  '/styles.css',
+  '/apple-touch-icon.png',
+  '/favicon.ico',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js',
 ];
 
-// Install — cache assets (NOT index.html — let the network always serve it)
+// Install — cache the app shell
 self.addEventListener('install', function(event) {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(function(cache) { return cache.addAll(ASSETS); })
-      .then(function() { return self.skipWaiting(); })
+    caches.open(CACHE_NAME).then(function(cache) {
+      return cache.addAll(APP_SHELL);
+    }).then(function() {
+      return self.skipWaiting();
+    })
   );
 });
 
@@ -41,14 +44,12 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Fetch strategy:
-// - Firebase calls: always network, never cache
-// - HTML navigation requests: always network (let GitHub Pages serve them)
-// - Everything else: network first, cache fallback
+// Fetch — network first, fall back to cache
+// Firebase/Firestore API calls always go network-only (never cache live data)
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Firebase
+  // Never intercept Firebase API calls — let them fail naturally if offline
   if (url.includes('firestore.googleapis.com') ||
       url.includes('firebase') ||
       url.includes('google.com/identitytoolkit') ||
@@ -56,32 +57,24 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Let HTML navigation go straight to network — never serve from SW cache
-  // This prevents the 404 loop on iOS standalone mode
-  if (event.request.mode === 'navigate') {
-    return;
-  }
-
-  // Strip iOS PWA pull-to-refresh cache-bust param
-  const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
-  const cleanRequest = cleanUrl !== url
-    ? new Request(cleanUrl, { mode: 'same-origin' })
-    : event.request;
-
-  // Network first, cache fallback for all other assets
+  // For app shell files: network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(function(response) {
+        // Cache a fresh copy on each successful network response
         if (response && response.status === 200 && response.type !== 'opaque') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(cleanRequest, clone);
+            cache.put(event.request, clone);
           });
         }
         return response;
       })
       .catch(function() {
-        return caches.match(cleanRequest);
+        // Network failed — serve from cache
+        return caches.match(event.request).then(function(cached) {
+          return cached || caches.match('/index.html');
+        });
       })
   );
 });
