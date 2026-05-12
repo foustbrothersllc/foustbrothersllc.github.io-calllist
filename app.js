@@ -260,6 +260,170 @@ let isAdmin = false;
     appWrapper.style.display = 'block';
     initApp();
   }
+
+  // ── Recovery: tap lock icon 5x fast ──────────────────────────
+  // Answer is stored as SHA-256 — not recoverable from source code.
+  const RECOVERY_HASH     = '708be297a62461a9d098f912eed82a02f862e21a91ed21c6557cf129608826f1';
+  const RECOVERY_ATTEMPTS_KEY = 'dcl_rec_attempts';
+  const RECOVERY_LOCKOUT_KEY  = 'dcl_rec_lockout';
+  const RECOVERY_COOLDOWN_MS  = 30 * 60 * 1000; // 30 minutes
+  const RECOVERY_MAX_ATTEMPTS = 3;
+
+  let tapCount = 0;
+  let tapTimer = null;
+
+  const gateIcon = document.querySelector('.gate-icon');
+  if (gateIcon) {
+    gateIcon.style.cursor = 'pointer';
+    gateIcon.addEventListener('click', function() {
+      tapCount++;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(function() { tapCount = 0; }, 600);
+      if (tapCount >= 5) {
+        tapCount = 0;
+        clearTimeout(tapTimer);
+        showRecoveryPrompt();
+      }
+    });
+  }
+
+  async function sha256(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function getRecoveryAttempts() {
+    return parseInt(localStorage.getItem(RECOVERY_ATTEMPTS_KEY) || '0', 10);
+  }
+  function getLockoutUntil() {
+    return parseInt(localStorage.getItem(RECOVERY_LOCKOUT_KEY) || '0', 10);
+  }
+
+  function showRecoveryPrompt() {
+    // Check if locked out
+    const lockoutUntil = getLockoutUntil();
+    const now = Date.now();
+    if (lockoutUntil > now) {
+      showCooldownModal(lockoutUntil);
+      return;
+    }
+
+    // Build modal
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(4px);';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:18px;padding:28px 24px 22px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);text-align:center;border-top:4px solid #FFB500;';
+
+    const attemptsLeft = RECOVERY_MAX_ATTEMPTS - getRecoveryAttempts();
+
+    box.innerHTML = `
+      <div style="font-size:28px;margin-bottom:10px;">🔑</div>
+      <h2 style="font-size:17px;font-weight:800;color:#351C15;margin-bottom:6px;">Access Key Recovery</h2>
+      <p style="font-size:13px;color:#7a6055;margin-bottom:16px;line-height:1.5;">Enter the year you started and the year you went to feeders.</p>
+      <input type="number" id="recoveryInput" placeholder="Answer"
+        style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e5d5cc;font-size:16px;outline:none;margin-bottom:8px;text-align:center;-webkit-appearance:none;"
+      >
+      <p id="recoveryError" style="font-size:12px;color:#b91c1c;min-height:16px;margin-bottom:10px;font-weight:600;"></p>
+      <p style="font-size:11px;color:#7a6055;margin-bottom:14px;">${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining</p>
+      <div style="display:flex;gap:8px;">
+        <button id="recoveryCancelBtn" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+        <button id="recoverySubmitBtn" style="flex:2;padding:11px;border-radius:10px;border:none;background:#351C15;color:#FFB500;font-size:14px;font-weight:800;cursor:pointer;">Verify</button>
+      </div>
+      <div id="recoveryReveal" style="display:none;margin-top:16px;padding:12px;background:#fff3cc;border-radius:10px;border:1.5px solid #FFB500;">
+        <p style="font-size:11px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Your Access Key</p>
+        <p id="recoveryKeyDisplay" style="font-size:20px;font-weight:800;color:#351C15;letter-spacing:1px;"></p>
+      </div>
+    `;
+
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+
+    const input        = box.querySelector('#recoveryInput');
+    const errorEl      = box.querySelector('#recoveryError');
+    const attemptsEl   = box.querySelector('p[style*="attempt"]') || null;
+    const submitBtn    = box.querySelector('#recoverySubmitBtn');
+    const cancelBtn    = box.querySelector('#recoveryCancelBtn');
+    const revealEl     = box.querySelector('#recoveryReveal');
+    const keyDisplay   = box.querySelector('#recoveryKeyDisplay');
+
+    setTimeout(function() { input.focus(); }, 200);
+
+    cancelBtn.addEventListener('click', function() { backdrop.remove(); });
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
+
+    submitBtn.addEventListener('click', async function() {
+      const val = input.value.trim();
+      if (!val) { errorEl.textContent = '⚠️ Please enter an answer.'; return; }
+
+      const hash = await sha256(val);
+      if (hash === RECOVERY_HASH) {
+        // Success — reset attempts, show key
+        localStorage.removeItem(RECOVERY_ATTEMPTS_KEY);
+        localStorage.removeItem(RECOVERY_LOCKOUT_KEY);
+        input.style.display = 'none';
+        submitBtn.style.display = 'none';
+        cancelBtn.textContent = 'Close';
+        errorEl.textContent = '';
+        revealEl.style.display = 'block';
+        keyDisplay.textContent = ACCESS_KEY;
+      } else {
+        // Wrong answer
+        const attempts = getRecoveryAttempts() + 1;
+        localStorage.setItem(RECOVERY_ATTEMPTS_KEY, String(attempts));
+        const left = RECOVERY_MAX_ATTEMPTS - attempts;
+        if (left <= 0) {
+          // Lock out for 30 minutes
+          localStorage.setItem(RECOVERY_LOCKOUT_KEY, String(Date.now() + RECOVERY_COOLDOWN_MS));
+          localStorage.removeItem(RECOVERY_ATTEMPTS_KEY);
+          backdrop.remove();
+          showCooldownModal(Date.now() + RECOVERY_COOLDOWN_MS);
+        } else {
+          errorEl.textContent = '❌ Incorrect. ' + left + ' attempt' + (left !== 1 ? 's' : '') + ' remaining.';
+          input.value = '';
+          input.focus();
+        }
+      }
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') submitBtn.click();
+    });
+  }
+
+  function showCooldownModal(lockoutUntil) {
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(4px);';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:18px;padding:28px 24px 22px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);text-align:center;border-top:4px solid #b91c1c;';
+    box.innerHTML = `
+      <div style="font-size:28px;margin-bottom:10px;">🔒</div>
+      <h2 style="font-size:17px;font-weight:800;color:#b91c1c;margin-bottom:8px;">Recovery Locked</h2>
+      <p style="font-size:13px;color:#7a6055;margin-bottom:16px;line-height:1.5;">Too many incorrect attempts. Try again in:</p>
+      <p id="cooldownTimer" style="font-size:28px;font-weight:800;color:#351C15;margin-bottom:16px;">--:--</p>
+      <button id="cooldownClose" style="width:100%;padding:11px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:600;cursor:pointer;">Close</button>
+    `;
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+
+    box.querySelector('#cooldownClose').addEventListener('click', function() { backdrop.remove(); clearInterval(ticker); });
+
+    const timerEl = box.querySelector('#cooldownTimer');
+    function tick() {
+      const remaining = Math.max(0, lockoutUntil - Date.now());
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      timerEl.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+      if (remaining <= 0) {
+        clearInterval(ticker);
+        backdrop.remove();
+      }
+    }
+    tick();
+    const ticker = setInterval(tick, 1000);
+  }
+
 })();
 
 // ── Main App ─────────────────────────────────────────────────
