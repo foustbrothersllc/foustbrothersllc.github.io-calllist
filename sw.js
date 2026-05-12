@@ -4,15 +4,17 @@
    Cache is versioned — bump CACHE_NAME when deploying updates.
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v4';
+const CACHE_NAME = 'driver-call-list-v5';
+const BASE = '/callist';
 
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/styles.css',
-  '/apple-touch-icon.png',
-  '/favicon.ico',
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/app.js',
+  BASE + '/styles.css',
+  BASE + '/manifest.json',
+  BASE + '/apple-touch-icon.png',
+  BASE + '/favicon.ico',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js',
@@ -78,8 +80,9 @@ self.addEventListener('fetch', function(event) {
       .catch(function() {
         // Network failed — serve from cache (use clean URL for lookup)
         return caches.match(cleanRequest).then(function(cached) {
-          return cached || caches.match('/index.html');
+          return cached || caches.match(BASE + '/index.html');
         });
       })
   );
 });
+
