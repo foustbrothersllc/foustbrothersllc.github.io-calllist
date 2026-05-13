@@ -889,7 +889,9 @@ function initApp() {
 
   // ── Filter / search ──────────────────────────────────────────
   function updateCount(visible) {
-    countBar.textContent = 'Showing ' + visible + ' of ' + allCards.length + ' drivers';
+    const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
+    const ts = meta ? ' · Updated ' + meta.date : '';
+    countBar.textContent = 'Showing ' + visible + ' of ' + allCards.length + ' drivers' + ts;
   }
   function applyFilter() {
     const query = searchBox.value.toLowerCase().trim();
