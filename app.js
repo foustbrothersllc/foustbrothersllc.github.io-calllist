@@ -1302,7 +1302,7 @@ function initApp() {
     } else {
       dupDeleteAll.style.display = 'block';
       const header = document.createElement('p');
-      header.style.cssText = 'font-size:11px;color:#5a3525;margin-bottom:10px;';
+      header.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.7);margin-bottom:10px;';
       header.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
       dupResults.appendChild(header);
 
@@ -1310,7 +1310,7 @@ function initApp() {
         const d = item.d;
         const key = item.key;
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #e5d5cc;';
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.style.accentColor = '#b91c1c';
@@ -1320,7 +1320,7 @@ function initApp() {
         });
         const label = document.createElement('span');
         const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
-        label.style.cssText = 'font-size:13px;color:#351C15;';
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
         label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
         row.appendChild(cb);
         row.appendChild(label);
