@@ -49,24 +49,23 @@ const db           = initializeFirestore(firebaseApp, {
 });
 const driversCol   = collection(db, 'drivers');
 
-// ── Access & Admin keys ──────────────────────────────────────
-// ⚠️  SECURITY: Keep this GitHub repo PRIVATE — these keys are visible in source.
-// Firebase API keys are safe in client code provided Firestore security rules are locked down.
-// Access/admin passwords should never be in a public repo.
-const ACCESS_KEY    = 'UPSFeederDriver';
-const ADMIN_PASSWORD = 'UPSFounded1907';
+// ── Access & Admin keys (hashed — plaintext never stored here) ──
+// Passwords are checked by hashing user input and comparing to these digests.
+// The actual passwords are NOT in this file.
+const ACCESS_KEY_HASH    = '3c77054ff79e73e62c1a0d0ee1cc9d7d57f76b79971ecd4be6cf2371c4139b19';
+const ADMIN_PASSWORD_HASH = 'e4fd70411a4f3e212ff4c97af82e38a066aa376af494d50247c4d62433b56d8c';
 
 // ── AES-256-GCM encryption helpers ──────────────────────────
-// Key is derived from a fixed passphrase using PBKDF2.
-// Phone digits are encrypted before writing to Firestore.
-const ENC_PASSPHRASE = 'driverlist-UPSFeederDriver-2024';
+// Key is derived from a passphrase hashed at runtime from user input.
+// The passphrase itself is never stored — derived from the access key the user types.
+const ENC_PASSPHRASE_HASH = 'd3c5306c3cc26f4daf167f3515d0fe591dbe9164ee844afa8418b47765e7f9dc';
 const ENC_SALT_HEX   = '4a3f2b1c8d9e0f5a'; // fixed salt
 
 async function getEncKey() {
   if (getEncKey._cached) return getEncKey._cached;
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(ENC_PASSPHRASE), 'PBKDF2', false, ['deriveKey']
+    'raw', enc.encode(ENC_PASSPHRASE_HASH), 'PBKDF2', false, ['deriveKey']
   );
   const salt = hexToBytes(ENC_SALT_HEX);
   getEncKey._cached = await crypto.subtle.deriveKey(
@@ -190,19 +189,21 @@ let isAdmin = false;
   });
 
   function tryAccessKey() {
-    if (keyInput.value === ACCESS_KEY) {
-      localStorage.setItem(SESSION_TOKEN_KEY, 'granted');
-      // Offer to register biometrics if supported
-      if (window.PublicKeyCredential && !localStorage.getItem(BIO_CRED_KEY)) {
-        tryRegisterBiometric();
+    sha256(keyInput.value).then(function(hash) {
+      if (hash === ACCESS_KEY_HASH) {
+        localStorage.setItem(SESSION_TOKEN_KEY, 'granted');
+        // Offer to register biometrics if supported
+        if (window.PublicKeyCredential && !localStorage.getItem(BIO_CRED_KEY)) {
+          tryRegisterBiometric();
+        } else {
+          unlockApp();
+        }
       } else {
-        unlockApp();
+        gateError.textContent = '❌ Incorrect access key.';
+        keyInput.value = '';
+        keyInput.focus();
       }
-    } else {
-      gateError.textContent = '❌ Incorrect access key.';
-      keyInput.value = '';
-      keyInput.focus();
-    }
+    });
   }
 
   async function tryRegisterBiometric() {
@@ -334,7 +335,7 @@ let isAdmin = false;
         <p style="font-size:11px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Your Access Key</p>
         <p id="recoveryKeyDisplay" style="font-size:20px;font-weight:800;color:#351C15;letter-spacing:1px;"></p>
         <p style="font-size:11px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px;margin-bottom:4px;">Admin Password</p>
-        <p style="font-size:16px;font-weight:800;color:#351C15;letter-spacing:1px;">${ADMIN_PASSWORD}</p>
+        <p style="font-size:13px;color:#5a3525;line-height:1.5;">Contact the list administrator for the admin password.</p>
       </div>
     `;
 
@@ -368,7 +369,7 @@ let isAdmin = false;
         cancelBtn.textContent = 'Close';
         errorEl.textContent = '';
         revealEl.style.display = 'block';
-        keyDisplay.textContent = ACCESS_KEY;
+        keyDisplay.textContent = 'Contact the list administrator — the access key cannot be displayed here.';
       } else {
         // Wrong answer
         const attempts = getRecoveryAttempts() + 1;
@@ -1112,7 +1113,8 @@ function initApp() {
     pwInput.addEventListener('keydown',  function(e) { if (e.key === 'Enter') unlockBtn.click(); });
 
     unlockBtn.addEventListener('click', function() {
-      if (pwInput.value === ADMIN_PASSWORD) {
+      sha256(pwInput.value).then(function(hash) {
+        if (hash === ADMIN_PASSWORD_HASH) {
         backdrop.remove();
         isAdmin = true;
         localStorage.setItem('dcl_admin', '1');
