@@ -467,6 +467,21 @@ function initApp() {
   // 'last' = "Smith, John"  |  'first' = "John Smith"
   let nameOrder = localStorage.getItem('dcl_name_order') || 'last';
 
+  // ── Haptic feedback ──────────────────────────────────────────
+  let hapticEnabled = localStorage.getItem('dcl_haptic') !== 'off';
+  function haptic(style) {
+    if (!hapticEnabled) return;
+    if (navigator.vibrate) {
+      if (style === 'light')  navigator.vibrate(8);
+      else if (style === 'medium') navigator.vibrate(20);
+      else if (style === 'heavy')  navigator.vibrate([30, 20, 30]);
+      else navigator.vibrate(10);
+    }
+  }
+
+  // ── Undo delete state ────────────────────────────────────────
+  let _undoToastTimer = null;
+
   // 3-version import log
   const UPDATE_LOG_KEY = 'dcl_update_log';
   function getUpdateLog() {
@@ -555,6 +570,7 @@ function initApp() {
       'padding:14px;border-radius:12px;background:#FFB500;color:#1e0f0b;',
       'font-size:16px;font-weight:800;text-decoration:none;',
     ].join('');
+    callBtn.addEventListener('click', function() { haptic('medium'); });
     callBtn.innerHTML = '📞 Call';
     box.appendChild(callBtn);
 
@@ -622,6 +638,7 @@ function initApp() {
         + '<span class="phone-number">' + formatPhone(digits) + '</span>';
       numBtn.addEventListener('click', function(e) {
         e.stopPropagation();
+        haptic('light');
         showPhoneActionSheet(digits);
       });
       wrap.appendChild(numBtn);
@@ -819,33 +836,93 @@ function initApp() {
     }, 310);
   }
 
+  // ── Show undo toast (delete fires after 5s) ──────────────────
+  function showUndoToast(message, onCommit, onUndo) {
+    // Cancel any existing pending delete
+    if (_undoToastTimer) {
+      clearTimeout(_undoToastTimer);
+      _undoToastTimer = null;
+      const old = document.getElementById('undoToast');
+      if (old) old.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.id = 'undoToast';
+    toast.style.cssText = [
+      'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);',
+      'z-index:999;background:#351C15;color:#fff;',
+      'border-radius:40px;padding:11px 14px 11px 18px;',
+      'display:flex;align-items:center;gap:12px;overflow:hidden;',
+      'box-shadow:0 4px 18px rgba(0,0,0,0.35);',
+      'font-size:13px;font-weight:600;white-space:nowrap;'
+    ].join('');
+
+    const msgEl = document.createElement('span');
+    msgEl.textContent = message;
+    toast.appendChild(msgEl);
+
+    const prog = document.createElement('div');
+    prog.style.cssText = 'position:absolute;bottom:0;left:0;height:3px;background:#FFB500;border-radius:0;width:100%;transition:width 5s linear;';
+    toast.appendChild(prog);
+
+    const undoBtn = document.createElement('button');
+    undoBtn.textContent = 'Undo';
+    undoBtn.style.cssText = [
+      'background:#FFB500;color:#1e0f0b;border:none;',
+      'border-radius:20px;padding:5px 14px;',
+      'font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;'
+    ].join('');
+
+    let cancelled = false;
+    undoBtn.addEventListener('click', function() {
+      cancelled = true;
+      haptic('medium');
+      clearTimeout(_undoToastTimer);
+      _undoToastTimer = null;
+      toast.remove();
+      if (onUndo) onUndo();
+    });
+    toast.appendChild(undoBtn);
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { prog.style.width = '0%'; });
+    });
+
+    _undoToastTimer = setTimeout(function() {
+      _undoToastTimer = null;
+      toast.remove();
+      if (!cancelled) onCommit();
+    }, 5000);
+  }
+
   // ── Initiate delete (after long press) ───────────────────────
   function initiateDelete(key, outer) {
     const driver = driverMap.get(key);
     if (!driver) return;
-    pendingDeleteKey = key;
-    deleteBody.textContent = 'Delete ' + driver.lastName + ', ' + driver.firstName + '? This cannot be undone.';
-    deleteModal.classList.add('open');
+    haptic('heavy');
 
-    function onConfirm() {
-      driverSet.delete(key);
-      driverMap.delete(key);
-      if (outer) animateRemove(outer);
-      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
-      applyFilter();
-      deleteModal.classList.remove('open');
-      cleanup();
-    }
-    function onCancel()  { deleteModal.classList.remove('open'); cleanup(); }
-    function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
-    function cleanup() {
-      deleteCancel.removeEventListener('click', onCancel);
-      deleteConfirm.removeEventListener('click', onConfirm);
-      deleteModal.removeEventListener('click', onBackdrop);
-    }
-    deleteCancel.addEventListener('click',  onCancel);
-    deleteConfirm.addEventListener('click', onConfirm);
-    deleteModal.addEventListener('click',   onBackdrop);
+    // Immediately remove from UI
+    driverSet.delete(key);
+    driverMap.delete(key);
+    const savedDriver = { ...driver };
+    if (outer) animateRemove(outer);
+    allCards = allCards.filter(c => c !== outer);
+    applyFilter();
+
+    showUndoToast(
+      '🗑 ' + savedDriver.lastName + ', ' + savedDriver.firstName + ' deleted',
+      function onCommit() {
+        supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
+        cacheDelete(keyToDocId(key));
+      },
+      function onUndo() {
+        driverSet.add(key);
+        driverMap.set(key, savedDriver);
+        upsertDriver(savedDriver);
+        applyFilter();
+      }
+    );
   }
 
   // ── Render all cards (RAF-batched for smooth performance) ────
@@ -1339,10 +1416,64 @@ function initApp() {
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
 
+    // ── Section 1: Duplicate phone numbers ────────────────────
+    const phoneMap = new Map(); // digits → [key, ...]
+    driverMap.forEach(function(d, key) {
+      if (d.phone && d.phone.digits) {
+        const arr = phoneMap.get(d.phone.digits) || [];
+        arr.push(key);
+        phoneMap.set(d.phone.digits, arr);
+      }
+      if (d.altPhone && d.altPhone.digits) {
+        const arr = phoneMap.get(d.altPhone.digits) || [];
+        arr.push(key);
+        phoneMap.set(d.altPhone.digits, arr);
+      }
+    });
+
+    const dupPhones = [];
+    phoneMap.forEach(function(keys, digits) {
+      if (keys.length > 1) dupPhones.push({ digits, keys });
+    });
+
+    if (dupPhones.length > 0) {
+      const secHeader = document.createElement('p');
+      secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
+      secHeader.textContent = '⚠️ Duplicate Phone Numbers (' + dupPhones.length + ')';
+      dupResults.appendChild(secHeader);
+
+      dupPhones.forEach(function(item) {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'background:rgba(255,181,0,0.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;';
+        const numEl = document.createElement('div');
+        numEl.style.cssText = 'font-size:12px;font-weight:700;color:#FFB500;margin-bottom:4px;';
+        numEl.textContent = formatPhone(item.digits);
+        wrap.appendChild(numEl);
+        item.keys.forEach(function(key) {
+          const d = driverMap.get(key);
+          if (!d) return;
+          const nameEl = document.createElement('div');
+          nameEl.style.cssText = 'font-size:12px;color:#ffffff;padding-left:6px;';
+          nameEl.textContent = '• ' + d.lastName + ', ' + d.firstName + ' (' + (d.location || '') + ')';
+          wrap.appendChild(nameEl);
+        });
+        dupResults.appendChild(wrap);
+      });
+
+      const divider = document.createElement('div');
+      divider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+      dupResults.appendChild(divider);
+    }
+
+    // ── Section 2: Possibly retired (not on last import) ──────
     const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
     if (!meta) {
-      dupResults.innerHTML = '<p style="color:#5a3525;text-align:center;padding:16px;">No import on record yet.<br>Run an import first.</p>';
-      dupDeleteAll.style.display = 'none';
+      const noImport = document.createElement('p');
+      noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
+      noImport.textContent = 'Run an import to see possibly retired drivers.';
+      dupResults.appendChild(noImport);
+      if (dupPhones.length === 0) dupDeleteAll.style.display = 'none';
+      else dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
       dupModal.classList.add('open');
       return;
     }
@@ -1350,20 +1481,28 @@ function initApp() {
     const importedIds = new Set(meta.grencIds || []);
     const possibly = [];
     driverMap.forEach(function(d, key) {
-      if ((d.location || '').toLowerCase() !== 'greensboro') return; // skip MEBNC
+      if ((d.location || '').toLowerCase() !== 'greensboro') return;
       const docId = keyToDocId(key);
       if (!importedIds.has(docId)) possibly.push({ key, d });
     });
 
+    const secHeader2 = document.createElement('p');
+    secHeader2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
+    secHeader2.textContent = 'Possibly Retired – GRENC (' + possibly.length + ')';
+    dupResults.appendChild(secHeader2);
+
     if (possibly.length === 0) {
-      dupResults.innerHTML = '<p style="color:#166534;text-align:center;padding:16px;">✅ All GRENC drivers were on the last import.</p>';
+      const okEl = document.createElement('p');
+      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
+      okEl.textContent = '✅ All GRENC drivers were on the last import.';
+      dupResults.appendChild(okEl);
       dupDeleteAll.style.display = 'none';
     } else {
       dupDeleteAll.style.display = 'block';
-      const header = document.createElement('p');
-      header.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.7);margin-bottom:10px;';
-      header.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
-      dupResults.appendChild(header);
+      const impHeader = document.createElement('p');
+      impHeader.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:8px;';
+      impHeader.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
+      dupResults.appendChild(impHeader);
 
       possibly.forEach(function(item) {
         const d = item.d;
@@ -1541,7 +1680,7 @@ function initApp() {
     if (!file) { importStatus.textContent = '⚠️ Please choose a JSON or PDF file first.'; return; }
 
     importConfirm.disabled = true;
-    importConfirm.textContent = 'Importing…';
+    importConfirm.textContent = 'Analyzing…';
     importStatus.textContent = 'Reading file…';
     setProgress(5, 'Reading file…');
 
@@ -1558,7 +1697,6 @@ function initApp() {
         const text = await file.text();
         newDrivers = JSON.parse(text);
         if (!Array.isArray(newDrivers)) throw new Error('File must be a JSON array.');
-        // Normalise SLICs
         newDrivers = newDrivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
       }
     } catch(e) {
@@ -1578,7 +1716,69 @@ function initApp() {
       incomingMap.set(keyToDocId(key), d);
     });
 
-    // Pre-flight check — confirm we can reach the database before uploading
+    // ── Build preview summary ─────────────────────────────────
+    let countNew = 0, countUpdate = 0;
+    incomingMap.forEach(function(d, id) {
+      if (driverMap.has(id.replace(/_/g, '|').replace(/\|.*/, '') + '|' + id.replace(/.*\|/, ''))) {
+        countUpdate++;
+      } else {
+        // Use driverKey logic to check membership
+      }
+    });
+    // More reliable: compare incoming doc IDs with current driverMap keys→docIds
+    const existingDocIds = new Set();
+    driverMap.forEach(function(d, key) { existingDocIds.add(keyToDocId(key)); });
+    countNew = 0; countUpdate = 0;
+    incomingMap.forEach(function(d, docId) {
+      if (existingDocIds.has(docId)) countUpdate++;
+      else countNew++;
+    });
+    const total = incomingMap.size;
+
+    // Show preview modal — wait for user confirmation
+    const previewModal  = document.getElementById('importPreviewModal');
+    const previewBody   = document.getElementById('importPreviewBody');
+    const previewCancel = document.getElementById('importPreviewCancel');
+    const previewOk     = document.getElementById('importPreviewConfirm');
+
+    previewBody.innerHTML =
+      '<div style="margin-bottom:8px;"><strong>File:</strong> ' + file.name + '</div>'
+      + '<div style="margin-bottom:4px;">📥 <strong>' + countNew + '</strong> new driver' + (countNew !== 1 ? 's' : '') + ' will be added</div>'
+      + '<div style="margin-bottom:4px;">✏️ <strong>' + countUpdate + '</strong> existing driver' + (countUpdate !== 1 ? 's' : '') + ' will be updated</div>'
+      + '<div style="margin-bottom:4px;">📋 <strong>' + total + '</strong> total records in file</div>';
+
+    importModal.classList.remove('open');
+    previewModal.classList.add('open');
+
+    await new Promise(function(resolve, reject) {
+      function onOk()     { previewModal.classList.remove('open'); resolve(); cleanup(); }
+      function onCancel() {
+        previewModal.classList.remove('open');
+        importModal.classList.add('open');
+        importConfirm.disabled = false;
+        importConfirm.textContent = 'Import';
+        hideProgress();
+        reject(new Error('cancelled'));
+        cleanup();
+      }
+      function cleanup() {
+        previewOk.removeEventListener('click', onOk);
+        previewCancel.removeEventListener('click', onCancel);
+      }
+      previewOk.addEventListener('click', onOk);
+      previewCancel.addEventListener('click', onCancel);
+    }).catch(function(e) {
+      if (e.message !== 'cancelled') throw e;
+      return Promise.reject(e);
+    });
+
+    // Re-open import modal to show progress
+    importModal.classList.add('open');
+    importConfirm.disabled = true;
+    importConfirm.textContent = 'Importing…';
+    setProgress(50, 'Starting upload…');
+
+    // Pre-flight check
     const { error: dbCheckError } = await supabase.from('drivers').select('id').limit(1);
     if (dbCheckError) {
       importStatus.textContent = '❌ Failed to read database: ' + dbCheckError.message;
@@ -1588,7 +1788,6 @@ function initApp() {
       return;
     }
 
-    const total = incomingMap.size;
     let done = 0;
 
     // Track which GRENC doc IDs were in this import (for Possibly Retired check)
@@ -1598,7 +1797,6 @@ function initApp() {
         importedGrencIds.add(keyToDocId(driverKey(d.lastName, d.firstName)));
       }
     });
-    // Save to localStorage so Possibly Retired button can use it
     const lastImportMeta = {
       date: new Date().toLocaleString(),
       file: file.name,
@@ -1665,7 +1863,7 @@ function initApp() {
   }
 
   importCancel.addEventListener('click', closeImportModal);
-  importConfirm.addEventListener('click', runImport);
+  importConfirm.addEventListener('click', function() { runImport().catch(function(e) { if (e && e.message !== 'cancelled') console.error(e); }); });
   importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
 
   // ── Event listeners ──────────────────────────────────────────
@@ -1690,6 +1888,7 @@ function initApp() {
   // Clearing search on filter change so results aren't confusingly stale
   filterBtns.forEach(function(btn) {
     btn.addEventListener('click', function() {
+      haptic('light');
       filterBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       activeFilter = btn.dataset.loc;
@@ -1750,11 +1949,84 @@ function initApp() {
     });
     filterRow.appendChild(btn);
   })();
-  fabAdd.addEventListener('click', openAddPanel);
+  fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
   panelClose.addEventListener('click', closePanel);
   btnCancel.addEventListener('click', closePanel);
   panelOverlay.addEventListener('click', closePanel);
   btnSave.addEventListener('click', saveDriver);
+
+  // ── Settings modal ───────────────────────────────────────────
+  (function initSettings() {
+    const settingsModal   = document.getElementById('settingsModal');
+    const settingsClose   = document.getElementById('settingsClose');
+    const settingsNameSub = document.getElementById('settingsNameSub');
+    const settingsNameToggle = document.getElementById('settingsNameToggle');
+    const hapticToggle    = document.getElementById('settingsHapticToggle');
+
+    function updateNameSub() {
+      settingsNameSub.textContent = nameOrder === 'last' ? 'Last, First (e.g. Smith, John)' : 'First Last (e.g. John Smith)';
+    }
+    function updateHapticToggle() {
+      hapticToggle.textContent = hapticEnabled ? 'On' : 'Off';
+      hapticToggle.style.background = hapticEnabled ? '#FFB500' : 'rgba(255,255,255,0.15)';
+      hapticToggle.style.color = hapticEnabled ? '#1e0f0b' : '#fff';
+    }
+
+    document.getElementById('btnSettings').addEventListener('click', function() {
+      haptic('light');
+      updateNameSub();
+      updateHapticToggle();
+      settingsModal.classList.add('open');
+    });
+
+    settingsClose.addEventListener('click', function() { settingsModal.classList.remove('open'); });
+    settingsModal.addEventListener('click', function(e) { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+
+    settingsNameToggle.addEventListener('click', function() {
+      haptic('light');
+      // Reuse the existing name toggle logic
+      nameOrder = nameOrder === 'last' ? 'first' : 'last';
+      localStorage.setItem('dcl_name_order', nameOrder);
+      updateNameSub();
+      // Update the ⇄ button in filter row if present
+      const oldBtn = document.getElementById('btnNameOrder');
+      if (oldBtn) {
+        oldBtn.textContent = nameOrder === 'last' ? '⇄ First Last' : '⇄ Last, First';
+        oldBtn.title = nameOrder === 'last' ? 'Switch to First Last display' : 'Switch to Last, First display';
+      }
+      // Update all card name labels
+      allCards.forEach(function(outer) {
+        const key = outer.dataset.key;
+        const driver = driverMap.get(key);
+        if (!driver) return;
+        const nameEl = outer.querySelector('.name');
+        if (nameEl) {
+          nameEl.textContent = nameOrder === 'first'
+            ? driver.firstName + ' ' + driver.lastName
+            : driver.lastName + ', ' + driver.firstName;
+        }
+      });
+      // Re-sort cards
+      allCards.sort(function(a, b) {
+        const da = driverMap.get(a.dataset.key);
+        const db = driverMap.get(b.dataset.key);
+        if (!da || !db) return 0;
+        const ka = nameOrder === 'first' ? (da.firstName + da.lastName).toLowerCase() : (da.lastName + da.firstName).toLowerCase();
+        const kb = nameOrder === 'first' ? (db.firstName + db.lastName).toLowerCase() : (db.lastName + db.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      const frag = document.createDocumentFragment();
+      allCards.forEach(function(outer) { frag.appendChild(outer); });
+      listEl.insertBefore(frag, noResults);
+    });
+
+    hapticToggle.addEventListener('click', function() {
+      hapticEnabled = !hapticEnabled;
+      localStorage.setItem('dcl_haptic', hapticEnabled ? 'on' : 'off');
+      haptic('light'); // one last buzz if turning on
+      updateHapticToggle();
+    });
+  })();
 
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
   document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
