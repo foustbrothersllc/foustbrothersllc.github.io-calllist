@@ -93,7 +93,8 @@
       <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
-        <button id="btnScanDups"  class="btn-admin">🔍 Possibly Retired</button>
+        <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
+        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
         <button id="btnNoPhone"   class="btn-admin">📵 No Phone</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
@@ -199,12 +200,12 @@
     <!-- Duplicate Scan Modal -->
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
-        <div class="modal-icon">👴</div>
-        <h2 class="modal-title">Possibly Retired</h2>
+        <div class="modal-icon">🧹</div>
+        <h2 class="modal-title">List Cleanup</h2>
         <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="dupClose">Close</button>
-          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
+          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">🏷 Retire Selected</button>
         </div>
       </div>
     </div>
