@@ -412,6 +412,12 @@ async function sha256(str) {
 function initApp() {
   'use strict';
 
+  // ── Eager AES key warm-up ────────────────────────────────────
+  // PBKDF2 with 100k iterations is intentionally slow. Kick it off immediately
+  // so the key is ready by the time IDB finishes opening — otherwise it blocks
+  // the entire cache-render path.
+  getEncKey().catch(function() {}); // fire and forget
+
   // ── DOM refs ─────────────────────────────────────────────────
   const listEl          = document.getElementById('cardList');
   const searchBox       = document.getElementById('searchBox');
@@ -855,7 +861,7 @@ function initApp() {
     driverMap.clear();
     allCards = [];
 
-    const BATCH = 20; // cards per animation frame
+    const BATCH = 50; // cards per animation frame — 50 keeps frames under 16ms on modern phones
     let index = 0;
 
     function renderBatch() {
@@ -1813,15 +1819,22 @@ function initApp() {
   })();
 
   // ── IndexedDB cache ─────────────────────────────────────────
-  // Stores encrypted rows locally so the app loads instantly offline.
+  // VERSION 2: stores DECRYPTED driver objects (not encrypted Supabase rows).
+  // Encryption protects data in Supabase; locally on-device there is no benefit
+  // to re-encrypting. Skipping decrypt on every load is the single biggest
+  // speed win — it eliminates hundreds of AES-GCM ops and removes the async
+  // waterfall that blocked painting.
+  // Bump to version 2 forces an upgrade that clears the old encrypted store.
   const IDB_NAME    = 'dcl_cache';
   const IDB_STORE   = 'drivers';
-  const IDB_VERSION = 1;
+  const IDB_VERSION = 2;
 
   function openCache() {
     return new Promise(function(resolve, reject) {
       const req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = function(e) {
+        // Delete old store (v1, encrypted) if it exists, then recreate clean.
+        try { e.target.result.deleteObjectStore(IDB_STORE); } catch(_) {}
         e.target.result.createObjectStore(IDB_STORE, { keyPath: 'id' });
       };
       req.onsuccess = function(e) { resolve(e.target.result); };
@@ -1829,32 +1842,47 @@ function initApp() {
     });
   }
 
+  // Returns pre-sorted array of decrypted driver objects, ready to render.
   async function cacheGetAll() {
     try {
       const db = await openCache();
-      return new Promise(function(resolve, reject) {
+      const rows = await new Promise(function(resolve) {
         const tx  = db.transaction(IDB_STORE, 'readonly');
         const req = tx.objectStore(IDB_STORE).getAll();
         req.onsuccess = function() { resolve(req.result || []); };
         req.onerror   = function() { resolve([]); };
       });
+      // Rows store { id, driver } — driver is already decrypted and pre-sorted.
+      return rows.map(function(r) { return r.driver; });
     } catch(_) { return []; }
   }
 
+  // Accepts raw Supabase rows ({ id, data }), decrypts, sorts, then stores.
   async function cachePutAll(rows) {
     try {
+      const drivers = await Promise.all(
+        (rows || []).map(function(row) { return decryptDriver(row.data).then(function(d) { return { id: row.id, driver: d }; }); })
+      );
+      // Pre-sort so cacheGetAll returns ready-to-render order.
+      drivers.sort(function(a, b) {
+        const ka = (a.driver.lastName + a.driver.firstName).toLowerCase();
+        const kb = (b.driver.lastName + b.driver.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
       const db = await openCache();
       const tx  = db.transaction(IDB_STORE, 'readwrite');
       const store = tx.objectStore(IDB_STORE);
-      rows.forEach(function(row) { store.put(row); });
+      drivers.forEach(function(row) { store.put(row); });
     } catch(_) {}
   }
 
+  // Single upsert — decrypts before storing.
   async function cachePut(row) {
     try {
+      const driver = await decryptDriver(row.data);
       const db = await openCache();
       const tx  = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(row);
+      tx.objectStore(IDB_STORE).put({ id: row.id, driver });
     } catch(_) {}
   }
 
@@ -1880,34 +1908,24 @@ function initApp() {
   }
 
   function attachSnapshot() {
-    let cacheRendered = false; // tracks whether cache already painted the list
+    let cacheRendered = false;
 
-    // ── Step 1: show cache instantly ────────────────────────────
-    cacheGetAll().then(async function(rows) {
-      if (rows.length === 0) return; // nothing cached yet — wait for network
+    // ── Step 1: paint from IDB instantly (no decrypt — already stored clean) ──
+    cacheGetAll().then(function(drivers) {
+      if (drivers.length === 0) return; // nothing cached yet — wait for network
       removeLoadingMsg();
-      const drivers = await Promise.all(
-        rows.map(function(row) { return decryptDriver(row.data); })
-      );
-      drivers.sort(function(a, b) {
-        const ka = (a.lastName + a.firstName).toLowerCase();
-        const kb = (b.lastName + b.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
+      // drivers is already sorted (pre-sorted on write) — no sort needed here
       renderCards(drivers);
       cacheRendered = true;
-      firstSnapshot = false; // cache rendered — real-time can now apply deltas
+      firstSnapshot = false;
     });
 
-    // ── Step 2: fetch from Supabase in background ────────────────
+    // ── Step 2: fetch fresh data from Supabase in background ────
     supabase.from('drivers').select('id, data')
       .then(async function({ data, error }) {
         if (error) {
-          // Network failed — cache already showing (or rendering), just show offline banner
           showOfflineBanner();
           removeLoadingMsg();
-          // Use cacheRendered flag instead of allCards.length — allCards may still be
-          // empty while RAF batches are in-flight, causing a false "no cache" message.
           if (!cacheRendered) {
             const p = document.createElement('div');
             p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
@@ -1917,23 +1935,20 @@ function initApp() {
           }
           return;
         }
-        // Save fresh data to cache
-        await cachePutAll(data || []);
         if (navigator.onLine) hideOfflineBanner();
         removeLoadingMsg();
-        // Only re-render if server data actually differs from what's cached/shown.
-        // FIX: previously compared serverCount to allCards.length, but allCards may
-        // still be empty while RAF batches are in-flight — making counts differ even
-        // for identical data and causing a second renderCards() over an in-progress
-        // one, which produced doubled contacts. Comparing sorted IDs is reliable.
+
+        // Compare server IDs to what's showing — skip re-render if identical.
         const serverIds = (data || []).map(function(r) { return r.id; }).sort().join(',');
         const cachedIds = allCards.map(function(c) { return c.dataset.key; }).sort().join(',');
         if (cacheRendered && serverIds === cachedIds) {
-          // Data is identical — skip re-render
+          // Same data — update IDB cache silently in background, no re-render.
+          cachePutAll(data || []);
           firstSnapshot = false;
           return;
         }
-        // Different data — full re-render with latest server data
+
+        // Data changed — decrypt, cache, re-render.
         const drivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
@@ -1942,15 +1957,17 @@ function initApp() {
           const kb = (b.lastName + b.firstName).toLowerCase();
           return ka < kb ? -1 : ka > kb ? 1 : 0;
         });
+        // cachePutAll accepts raw Supabase rows — pass original data, not decrypted
+        await cachePutAll(data || []);
         firstSnapshot = false;
         renderCards(drivers);
       });
 
-    // ── Step 3: real-time updates ────────────────────────────────
+    // ── Step 3: real-time delta updates ─────────────────────────
     const channel = supabase.channel('drivers-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' },
         async function(payload) {
-          if (firstSnapshot) return; // wait for initial render to finish
+          if (firstSnapshot) return;
           if (payload.eventType === 'DELETE') {
             const key = payload.old.id;
             const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
@@ -1961,7 +1978,7 @@ function initApp() {
             await cacheDelete(key);
             applyFilter();
           } else {
-            // INSERT or UPDATE — update cache and UI
+            // INSERT or UPDATE
             await cachePut(payload.new);
             const driver = await decryptDriver(payload.new.data);
             upsertDriver(driver);
