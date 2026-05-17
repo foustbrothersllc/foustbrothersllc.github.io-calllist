@@ -527,6 +527,8 @@ body {
   align-items: center; justify-content: center;
   backdrop-filter: blur(3px);
 }
+/* Delete/confirm modal always sits above other modals */
+#deleteModal { z-index: 1500; }
 .modal-backdrop.open { display: flex; }
 .modal {
   background: var(--white);

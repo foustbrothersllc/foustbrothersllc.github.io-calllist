@@ -123,7 +123,6 @@ async function decryptDriver(raw) {
   const d = { ...raw };
   d.phone    = await decryptPhoneObj(raw.phone);
   d.altPhone = await decryptPhoneObj(raw.altPhone);
-  // Auto-promote: if no primary but has alt, move alt to primary
   if (!d.phone && d.altPhone) { d.phone = d.altPhone; d.altPhone = null; }
   return d;
 }
@@ -1087,28 +1086,25 @@ function initApp() {
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
-
     function onLocationChange() {
       if (inputLocation.value !== 'Retired') return;
-      // Revert immediately; only commit on confirm
       inputLocation.value = driver.location || 'Greensboro';
       deleteBody.textContent = 'Mark ' + driver.firstName + ' ' + driver.lastName + ' as retired? They will be hidden from the active list but kept in retired records.';
       const origText = deleteConfirm.textContent;
       deleteConfirm.textContent = 'Mark Retired';
       deleteModal.classList.add('open');
       function onConfirm() {
-        const rd = { ...driver, retired: true, retiredAt: new Date().toISOString() };
+        const rd = Object.assign({}, driver, { retired: true, retiredAt: new Date().toISOString() });
         encryptDriver(rd).then(function(enc) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function({error}){ if(error) console.error(error); });
+          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function(r){ if(r.error) console.error(r.error); });
         });
         driverSet.delete(key); driverMap.delete(key);
         const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
         if (outer) animateRemove(outer);
-        allCards = allCards.filter(c => c !== outer);
+        allCards = allCards.filter(function(c){ return c !== outer; });
         cacheDelete(keyToDocId(key)); applyFilter();
         inputLocation.removeEventListener('change', onLocationChange);
-        deleteModal.classList.remove('open');
-        deleteConfirm.textContent = origText;
+        deleteModal.classList.remove('open'); deleteConfirm.textContent = origText;
         cleanup(); closePanel();
       }
       function onCancel() { deleteModal.classList.remove('open'); deleteConfirm.textContent = origText; cleanup(); }
@@ -1480,6 +1476,7 @@ function initApp() {
     window.__cleanupSelected = [];
     document.getElementById('dupRetireSelected').style.display = 'none';
     document.getElementById('dupDeleteSelected').style.display = 'none';
+    document.getElementById('dupMarkClean').style.display = 'none';
 
     function updateBtns() {
       const any = window.__cleanupSelected.length > 0;
@@ -1519,7 +1516,7 @@ function initApp() {
     const sameBoth = [];
     driverMap.forEach(function(d, key) {
       if (d.phone && d.altPhone && d.phone.digits && d.altPhone.digits && d.phone.digits === d.altPhone.digits)
-        sameBoth.push({ key, d });
+        sameBoth.push({ key: key, d: d });
     });
     const sec1hdr = makeHeader('🔁', 'Same Primary & Alt Number (' + sameBoth.length + ')', '#FFB500');
     dupResults.appendChild(sec1hdr);
@@ -1546,8 +1543,7 @@ function initApp() {
           const updated = Object.assign({}, d, { altPhone: null, updatedAt: new Date().toLocaleString() });
           try {
             await saveDriverToFirestore(updated); driverMap.set(key, updated); upsertDriver(updated); applyFilter(); wrap.remove();
-            const rem = dupResults.querySelectorAll('[data-merge-row]').length;
-            sec1hdr.textContent = '🔁 Same Primary & Alt Number (' + rem + ')';
+            sec1hdr.textContent = '🔁 Same Primary & Alt Number (' + dupResults.querySelectorAll('[data-merge-row]').length + ')';
           } catch(e) { mergeBtn.disabled = false; mergeBtn.textContent = '⬆ Merge to Primary'; alert('Failed: ' + e.message); }
         });
         wrap.appendChild(info); wrap.appendChild(mergeBtn); dupResults.appendChild(wrap);
@@ -1569,7 +1565,7 @@ function initApp() {
       const possibly = [];
       driverMap.forEach(function(d, key) {
         if ((d.location || '').toLowerCase() !== 'greensboro') return;
-        if (!importedIds.has(keyToDocId(key))) possibly.push({ key, d });
+        if (!importedIds.has(keyToDocId(key))) possibly.push({ key: key, d: d });
       });
       const impInfo = document.createElement('p');
       impInfo.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.4);margin:0 0 6px;';
@@ -1582,6 +1578,8 @@ function initApp() {
           const phone = item.d.phone ? formatPhone(item.d.phone.digits) : 'no phone';
           dupResults.appendChild(makeCheckRow(item.key, item.d.lastName + ', ' + item.d.firstName + ' — ' + phone, '#ca8a04'));
         });
+        // Show "Mark Clean" button when there are unaccounted drivers
+        document.getElementById('dupMarkClean').style.display = 'inline-block';
       }
     }
 
@@ -1589,7 +1587,7 @@ function initApp() {
 
     // Section 3: No phone on file
     const noPhone = [];
-    driverMap.forEach(function(d, key) { if (!d.phone && !d.altPhone) noPhone.push({ key, d }); });
+    driverMap.forEach(function(d, key) { if (!d.phone && !d.altPhone) noPhone.push({ key: key, d: d }); });
     noPhone.sort(function(a, b) { return (a.d.lastName + a.d.firstName).toLowerCase() < (b.d.lastName + b.d.firstName).toLowerCase() ? -1 : 1; });
     dupResults.appendChild(makeHeader('📵', 'No Phone on File (' + noPhone.length + ')', '#f87171'));
     if (noPhone.length === 0) {
@@ -1606,6 +1604,12 @@ function initApp() {
   }
 
   dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
+
+  // "Mark Clean" — clears last import metadata so the Not on Last Import section resets
+  document.getElementById('dupMarkClean').addEventListener('click', function() {
+    localStorage.removeItem('dcl_last_import');
+    dupModal.classList.remove('open');
+  });
 
   function commitCleanup(mode) {
     const keys = window.__cleanupSelected || [];
@@ -1676,8 +1680,6 @@ function initApp() {
       modal = document.createElement('div');
       modal.id = 'retiredModal';
       modal.className = 'modal-backdrop';
-      // Higher z-index than deleteModal so it stacks correctly; deleteModal gets boosted when opened from here
-      modal.style.zIndex = '1200';
       modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
       modal.innerHTML = '<div class="modal" style="max-width:460px;border-top-color:#7a6055;">'
         + '<div class="modal-icon">🏷</div>'
@@ -1699,7 +1701,7 @@ function initApp() {
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid #e5d5cc;gap:8px;';
         const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
         const name = document.createElement('div');
-        name.style.cssText = 'font-weight:800;font-size:15px;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,0.5);';
+        name.style.cssText = 'font-weight:800;font-size:15px;color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,0.6);';
         name.textContent = driver.lastName + ', ' + driver.firstName;
         const meta = document.createElement('div');
         meta.style.cssText = 'font-size:12px;color:#FFB500;margin-top:3px;font-weight:600;';
@@ -1728,8 +1730,6 @@ function initApp() {
         delBtn.title = 'Permanently delete';
         delBtn.style.cssText = 'padding:7px 10px;border-radius:8px;border:1.5px solid #f87171;background:rgba(248,113,113,0.15);color:#f87171;font-size:13px;font-weight:700;cursor:pointer;';
         delBtn.addEventListener('click', function() {
-          // Boost deleteModal z-index above retiredModal while it's open
-          deleteModal.style.zIndex = '1300';
           deleteBody.textContent = 'Permanently delete ' + driver.lastName + ', ' + driver.firstName + '? This cannot be undone.';
           deleteModal.classList.add('open');
           function onConfirm() {
@@ -1738,9 +1738,9 @@ function initApp() {
               await cacheDelete(driver._docId); row.remove();
               if (rList.children.length === 0) rList.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:20px;">No retired drivers on record.</p>';
             });
-            deleteModal.classList.remove('open'); deleteModal.style.zIndex = ''; cleanup();
+            deleteModal.classList.remove('open'); cleanup();
           }
-          function onCancel()  { deleteModal.classList.remove('open'); deleteModal.style.zIndex = ''; cleanup(); }
+          function onCancel()  { deleteModal.classList.remove('open'); cleanup(); }
           function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
           function cleanup() {
             deleteConfirm.removeEventListener('click', onConfirm);
