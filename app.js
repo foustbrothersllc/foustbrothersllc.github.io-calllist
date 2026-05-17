@@ -123,7 +123,6 @@ async function decryptDriver(raw) {
   const d = { ...raw };
   d.phone    = await decryptPhoneObj(raw.phone);
   d.altPhone = await decryptPhoneObj(raw.altPhone);
-  if (!d.phone && d.altPhone) { d.phone = d.altPhone; d.altPhone = null; }
   return d;
 }
 
@@ -1086,39 +1085,6 @@ function initApp() {
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
-    function onLocationChange() {
-      if (inputLocation.value !== 'Retired') return;
-      inputLocation.value = driver.location || 'Greensboro';
-      deleteBody.textContent = 'Mark ' + driver.firstName + ' ' + driver.lastName + ' as retired? They will be hidden from the active list but kept in retired records.';
-      const origText = deleteConfirm.textContent;
-      deleteConfirm.textContent = 'Mark Retired';
-      deleteModal.classList.add('open');
-      function onConfirm() {
-        const rd = Object.assign({}, driver, { retired: true, retiredAt: new Date().toISOString() });
-        encryptDriver(rd).then(function(enc) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function(r){ if(r.error) console.error(r.error); });
-        });
-        driverSet.delete(key); driverMap.delete(key);
-        const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
-        if (outer) animateRemove(outer);
-        allCards = allCards.filter(function(c){ return c !== outer; });
-        cacheDelete(keyToDocId(key)); applyFilter();
-        inputLocation.removeEventListener('change', onLocationChange);
-        deleteModal.classList.remove('open'); deleteConfirm.textContent = origText;
-        cleanup(); closePanel();
-      }
-      function onCancel() { deleteModal.classList.remove('open'); deleteConfirm.textContent = origText; cleanup(); }
-      function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
-      function cleanup() {
-        deleteConfirm.removeEventListener('click', onConfirm);
-        deleteCancel.removeEventListener('click', onCancel);
-        deleteModal.removeEventListener('click', onBackdrop);
-      }
-      deleteConfirm.addEventListener('click', onConfirm);
-      deleteCancel.addEventListener('click', onCancel);
-      deleteModal.addEventListener('click', onBackdrop);
-    }
-    inputLocation.addEventListener('change', onLocationChange);
     showPanel();
   }
   function showPanel() {
@@ -1470,295 +1436,239 @@ function initApp() {
   }
 
 
-  // ── List Cleanup Modal ──────────────────────────────────────
-  function openDupModal() {
+  function openNoPhoneModal() {
+    // Reuse the dup modal but only show the no-phone section
     dupResults.innerHTML = '';
-    window.__cleanupSelected = [];
-    document.getElementById('dupRetireSelected').style.display = 'none';
-    document.getElementById('dupDeleteSelected').style.display = 'none';
-    document.getElementById('dupMarkClean').style.display = 'none';
+    window.__retiredKeysToDelete = [];
+    dupDeleteAll.style.display = 'none';
 
-    function updateBtns() {
-      const any = window.__cleanupSelected.length > 0;
-      document.getElementById('dupRetireSelected').style.display = any ? 'inline-block' : 'none';
-      document.getElementById('dupDeleteSelected').style.display = any ? 'inline-block' : 'none';
-    }
-    function addDivider() {
-      const d = document.createElement('div');
-      d.style.cssText = 'border-top:1px solid rgba(255,255,255,0.15);margin:10px 0;';
-      dupResults.appendChild(d);
-    }
-    function makeHeader(emoji, text, color) {
-      const h = document.createElement('p');
-      h.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px;color:' + color + ';';
-      h.textContent = emoji + ' ' + text;
-      return h;
-    }
-    function makeCheckRow(key, labelText, accentColor) {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,0.1);';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.style.cssText = 'flex-shrink:0;width:16px;height:16px;accent-color:' + accentColor + ';';
-      cb.addEventListener('change', function() {
-        if (cb.checked) window.__cleanupSelected.push(key);
-        else window.__cleanupSelected = window.__cleanupSelected.filter(function(k){ return k !== key; });
-        updateBtns();
-      });
-      const lbl = document.createElement('span');
-      lbl.style.cssText = 'font-size:13px;color:#ffffff;line-height:1.3;';
-      lbl.textContent = labelText;
-      row.appendChild(cb); row.appendChild(lbl);
-      return row;
-    }
-
-    // Section 1: Same primary & alt number
-    const sameBoth = [];
-    driverMap.forEach(function(d, key) {
-      if (d.phone && d.altPhone && d.phone.digits && d.altPhone.digits && d.phone.digits === d.altPhone.digits)
-        sameBoth.push({ key: key, d: d });
-    });
-    const sec1hdr = makeHeader('🔁', 'Same Primary & Alt Number (' + sameBoth.length + ')', '#FFB500');
-    dupResults.appendChild(sec1hdr);
-    if (sameBoth.length === 0) {
-      const ok = document.createElement('p');
-      ok.style.cssText = 'color:#6ee7a0;text-align:center;padding:6px;font-size:13px;margin:0;';
-      ok.textContent = '✅ No contacts with duplicate primary/alt numbers.';
-      dupResults.appendChild(ok);
-    } else {
-      sameBoth.forEach(function(item) {
-        const d = item.d; const key = item.key;
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid rgba(255,255,255,0.1);';
-        wrap.dataset.mergeRow = '1';
-        const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
-        const nm = document.createElement('div'); nm.style.cssText = 'font-size:13px;font-weight:700;color:#fff;'; nm.textContent = d.lastName + ', ' + d.firstName;
-        const ph = document.createElement('div'); ph.style.cssText = 'font-size:11px;color:#FFB500;margin-top:2px;'; ph.textContent = formatPhone(d.phone.digits) + ' (both fields)';
-        info.appendChild(nm); info.appendChild(ph);
-        const mergeBtn = document.createElement('button');
-        mergeBtn.textContent = '⬆ Merge to Primary';
-        mergeBtn.style.cssText = 'padding:5px 9px;border-radius:8px;border:1.5px solid #FFB500;background:rgba(255,181,0,0.15);color:#FFB500;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;';
-        mergeBtn.addEventListener('click', async function() {
-          mergeBtn.disabled = true; mergeBtn.textContent = '…';
-          const updated = Object.assign({}, d, { altPhone: null, updatedAt: new Date().toLocaleString() });
-          try {
-            await saveDriverToFirestore(updated); driverMap.set(key, updated); upsertDriver(updated); applyFilter(); wrap.remove();
-            sec1hdr.textContent = '🔁 Same Primary & Alt Number (' + dupResults.querySelectorAll('[data-merge-row]').length + ')';
-          } catch(e) { mergeBtn.disabled = false; mergeBtn.textContent = '⬆ Merge to Primary'; alert('Failed: ' + e.message); }
-        });
-        wrap.appendChild(info); wrap.appendChild(mergeBtn); dupResults.appendChild(wrap);
-      });
-    }
-
-    addDivider();
-
-    // Section 2: Not on last import
-    const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
-    dupResults.appendChild(makeHeader('📋', 'Not on Last Import – GRENC', 'rgba(255,255,255,0.7)'));
-    if (!meta) {
-      const noImport = document.createElement('p');
-      noImport.style.cssText = 'color:rgba(255,255,255,0.5);text-align:center;padding:8px;font-size:13px;margin:0;';
-      noImport.textContent = 'Run an import first to see this section.';
-      dupResults.appendChild(noImport);
-    } else {
-      const importedIds = new Set(meta.grencIds || []);
-      const possibly = [];
-      driverMap.forEach(function(d, key) {
-        if ((d.location || '').toLowerCase() !== 'greensboro') return;
-        if (!importedIds.has(keyToDocId(key))) possibly.push({ key: key, d: d });
-      });
-      const impInfo = document.createElement('p');
-      impInfo.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.4);margin:0 0 6px;';
-      impInfo.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
-      dupResults.appendChild(impInfo);
-      if (possibly.length === 0) {
-        const ok = document.createElement('p'); ok.style.cssText = 'color:#6ee7a0;text-align:center;padding:6px;font-size:13px;margin:0;'; ok.textContent = '✅ All GRENC drivers were on the last import.'; dupResults.appendChild(ok);
-      } else {
-        possibly.forEach(function(item) {
-          const phone = item.d.phone ? formatPhone(item.d.phone.digits) : 'no phone';
-          dupResults.appendChild(makeCheckRow(item.key, item.d.lastName + ', ' + item.d.firstName + ' — ' + phone, '#ca8a04'));
-        });
-        // Show "Mark Clean" button when there are unaccounted drivers
-        document.getElementById('dupMarkClean').style.display = 'inline-block';
-      }
-    }
-
-    addDivider();
-
-    // Section 3: No phone on file
     const noPhone = [];
-    driverMap.forEach(function(d, key) { if (!d.phone && !d.altPhone) noPhone.push({ key: key, d: d }); });
-    noPhone.sort(function(a, b) { return (a.d.lastName + a.d.firstName).toLowerCase() < (b.d.lastName + b.d.firstName).toLowerCase() ? -1 : 1; });
-    dupResults.appendChild(makeHeader('📵', 'No Phone on File (' + noPhone.length + ')', '#f87171'));
+    driverMap.forEach(function(d, key) {
+      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
+    });
+
+    const secHeader = document.createElement('p');
+    secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
+    secHeader.textContent = '📵 No Phone Number (' + noPhone.length + ')';
+    dupResults.appendChild(secHeader);
+
     if (noPhone.length === 0) {
-      const ok2 = document.createElement('p'); ok2.style.cssText = 'color:#6ee7a0;text-align:center;padding:6px;font-size:13px;margin:0;'; ok2.textContent = '✅ All drivers have at least one phone number.'; dupResults.appendChild(ok2);
+      const okEl = document.createElement('p');
+      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:16px;font-size:13px;';
+      okEl.textContent = '✅ All drivers have at least one phone number.';
+      dupResults.appendChild(okEl);
     } else {
-      noPhone.forEach(function(item) {
-        const loc = item.d.location === 'Mebane' ? 'MEBNC' : 'GRENC';
-        dupResults.appendChild(makeCheckRow(item.key, item.d.lastName + ', ' + item.d.firstName + ' (' + loc + ')', '#f87171'));
+      noPhone.sort(function(a, b) {
+        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
+      noPhone.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+      dupDeleteAll.style.display = noPhone.length > 0 ? 'block' : 'none';
     }
 
     dupModal.classList.add('open');
-    updateBtns();
+  }
+
+  function openDupModal() {
+    dupResults.innerHTML = '';
+    window.__retiredKeysToDelete = [];
+
+    // ── Section 1: Duplicate phone numbers ────────────────────
+    const phoneMap = new Map(); // digits → [key, ...]
+    driverMap.forEach(function(d, key) {
+      if (d.phone && d.phone.digits) {
+        const arr = phoneMap.get(d.phone.digits) || [];
+        arr.push(key);
+        phoneMap.set(d.phone.digits, arr);
+      }
+      if (d.altPhone && d.altPhone.digits) {
+        const arr = phoneMap.get(d.altPhone.digits) || [];
+        arr.push(key);
+        phoneMap.set(d.altPhone.digits, arr);
+      }
+    });
+
+    const dupPhones = [];
+    phoneMap.forEach(function(keys, digits) {
+      if (keys.length > 1) dupPhones.push({ digits, keys });
+    });
+
+    if (dupPhones.length > 0) {
+      const secHeader = document.createElement('p');
+      secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
+      secHeader.textContent = '⚠️ Duplicate Phone Numbers (' + dupPhones.length + ')';
+      dupResults.appendChild(secHeader);
+
+      dupPhones.forEach(function(item) {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'background:rgba(255,181,0,0.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;';
+        const numEl = document.createElement('div');
+        numEl.style.cssText = 'font-size:12px;font-weight:700;color:#FFB500;margin-bottom:4px;';
+        numEl.textContent = formatPhone(item.digits);
+        wrap.appendChild(numEl);
+        item.keys.forEach(function(key) {
+          const d = driverMap.get(key);
+          if (!d) return;
+          const nameEl = document.createElement('div');
+          nameEl.style.cssText = 'font-size:12px;color:#ffffff;padding-left:6px;';
+          nameEl.textContent = '• ' + d.lastName + ', ' + d.firstName + ' (' + (d.location || '') + ')';
+          wrap.appendChild(nameEl);
+        });
+        dupResults.appendChild(wrap);
+      });
+
+      const divider = document.createElement('div');
+      divider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+      dupResults.appendChild(divider);
+    }
+
+    // ── Section 2: Possibly retired (not on last import) ──────
+    const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
+    if (!meta) {
+      const noImport = document.createElement('p');
+      noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
+      noImport.textContent = 'Run an import to see possibly retired drivers.';
+      dupResults.appendChild(noImport);
+      if (dupPhones.length === 0) dupDeleteAll.style.display = 'none';
+      else dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
+      dupModal.classList.add('open');
+      return;
+    }
+
+    const importedIds = new Set(meta.grencIds || []);
+    const possibly = [];
+    driverMap.forEach(function(d, key) {
+      if ((d.location || '').toLowerCase() !== 'greensboro') return;
+      const docId = keyToDocId(key);
+      if (!importedIds.has(docId)) possibly.push({ key, d });
+    });
+
+    const secHeader2 = document.createElement('p');
+    secHeader2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
+    secHeader2.textContent = 'Possibly Retired – GRENC (' + possibly.length + ')';
+    dupResults.appendChild(secHeader2);
+
+    if (possibly.length === 0) {
+      const okEl = document.createElement('p');
+      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
+      okEl.textContent = '✅ All GRENC drivers were on the last import.';
+      dupResults.appendChild(okEl);
+      dupDeleteAll.style.display = 'none';
+    } else {
+      dupDeleteAll.style.display = 'block';
+      const impHeader = document.createElement('p');
+      impHeader.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:8px;';
+      impHeader.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
+      dupResults.appendChild(impHeader);
+
+      possibly.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+        });
+        const label = document.createElement('span');
+        const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+    }
+    // ── Section 3: No phone number on file ───────────────────────
+    const noPhone = [];
+    driverMap.forEach(function(d, key) {
+      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
+    });
+
+    const divider2 = document.createElement('div');
+    divider2.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+    dupResults.appendChild(divider2);
+
+    const secHeader3 = document.createElement('p');
+    secHeader3.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
+    secHeader3.textContent = '📵 No Phone Number (' + noPhone.length + ')';
+    dupResults.appendChild(secHeader3);
+
+    if (noPhone.length === 0) {
+      const okEl2 = document.createElement('p');
+      okEl2.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
+      okEl2.textContent = '✅ All drivers have at least one phone number.';
+      dupResults.appendChild(okEl2);
+    } else {
+      noPhone.sort(function(a, b) {
+        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      noPhone.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+      dupDeleteAll.style.display = 'block';
+    }
+
+    dupModal.classList.add('open');
   }
 
   dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
-
-  // "Mark Clean" — clears last import metadata so the Not on Last Import section resets
-  document.getElementById('dupMarkClean').addEventListener('click', function() {
-    localStorage.removeItem('dcl_last_import');
+  dupDeleteAll.addEventListener('click', function() {
+    const keys = window.__retiredKeysToDelete || [];
+    if (keys.length === 0) { dupModal.classList.remove('open'); return; }
+    keys.forEach(function(key) {
+      const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+      driverSet.delete(key);
+      driverMap.delete(key);
+      if (outer) animateRemove(outer);
+      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
+    });
+    applyFilter();
     dupModal.classList.remove('open');
   });
 
-  function commitCleanup(mode) {
-    const keys = window.__cleanupSelected || [];
-    keys.forEach(function(key) {
-      const driver = driverMap.get(key);
-      const outer  = listEl.querySelector('.card-outer[data-key="' + key + '"]');
-      driverSet.delete(key); driverMap.delete(key);
-      if (outer) { animateRemove(outer); allCards = allCards.filter(function(c){ return c !== outer; }); }
-      if (mode === 'retire' && driver) {
-        var rd = Object.assign({}, driver, { retired: true, retiredAt: new Date().toISOString() });
-        encryptDriver(rd).then(function(enc) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function(r){ if(r.error) console.error(r.error); });
-        });
-      } else {
-        supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function(r){ if(r.error) console.error(r.error); });
-      }
-      cacheDelete(keyToDocId(key));
-    });
-    window.__cleanupSelected = [];
-    applyFilter();
-    dupModal.classList.remove('open');
-  }
-
-  function confirmCleanup(mode) {
-    const keys = window.__cleanupSelected || [];
-    if (keys.length === 0) return;
-    const count = keys.length;
-    const nameList = keys.slice(0, 3).map(function(k) {
-      var d = driverMap.get(k);
-      return d ? d.lastName + ', ' + d.firstName : k;
-    }).join(', ') + (count > 3 ? ' and ' + (count - 3) + ' more' : '');
-    deleteBody.textContent = (mode === 'retire'
-      ? 'Mark ' + count + ' driver' + (count > 1 ? 's' : '') + ' as retired? (' + nameList + ') They will be hidden but kept in retired records.'
-      : 'Permanently delete ' + count + ' driver' + (count > 1 ? 's' : '') + '? (' + nameList + ') This cannot be undone.');
-    const origText = deleteConfirm.textContent;
-    deleteConfirm.textContent = mode === 'retire' ? 'Mark Retired' : 'Delete';
-    deleteModal.classList.add('open');
-    function onConfirm() { commitCleanup(mode); deleteModal.classList.remove('open'); deleteConfirm.textContent = origText; cleanup(); }
-    function onCancel()  { deleteModal.classList.remove('open'); deleteConfirm.textContent = origText; cleanup(); }
-    function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
-    function cleanup() {
-      deleteConfirm.removeEventListener('click', onConfirm);
-      deleteCancel.removeEventListener('click', onCancel);
-      deleteModal.removeEventListener('click', onBackdrop);
-    }
-    deleteConfirm.addEventListener('click', onConfirm);
-    deleteCancel.addEventListener('click', onCancel);
-    deleteModal.addEventListener('click', onBackdrop);
-  }
-
-  document.getElementById('dupRetireSelected').addEventListener('click', function() { confirmCleanup('retire'); });
-  document.getElementById('dupDeleteSelected').addEventListener('click', function() { confirmCleanup('delete'); });
-
-  // ── Retired Drivers Modal ─────────────────────────────────────
-  async function openRetiredModal() {
-    const { data: allRows, error } = await supabase.from('drivers').select('id, data');
-    if (error) { alert('Could not load retired drivers: ' + error.message); return; }
-    const retiredDrivers = [];
-    await Promise.all((allRows || []).map(async function(row) {
-      const d = await decryptDriver(row.data);
-      if (d.retired) retiredDrivers.push(Object.assign({}, d, { _docId: row.id }));
-    }));
-    retiredDrivers.sort(function(a, b) {
-      return (a.lastName + a.firstName).toLowerCase() < (b.lastName + b.firstName).toLowerCase() ? -1 : 1;
-    });
-    let modal = document.getElementById('retiredModal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'retiredModal';
-      modal.className = 'modal-backdrop';
-      modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
-      modal.innerHTML = '<div class="modal" style="max-width:460px;border-top-color:#7a6055;">'
-        + '<div class="modal-icon">🏷</div>'
-        + '<h2 class="modal-title">Retired Drivers</h2>'
-        + '<div id="retiredList" style="max-height:55vh;overflow-y:auto;text-align:left;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>'
-        + '<div class="modal-actions"><button class="btn-modal-cancel" id="retiredClose">Close</button></div>'
-        + '</div>';
-      document.getElementById('appWrapper').appendChild(modal);
-      document.getElementById('retiredClose').addEventListener('click', function() { modal.classList.remove('open'); });
-      modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
-    }
-    const rList = document.getElementById('retiredList');
-    rList.innerHTML = '';
-    if (retiredDrivers.length === 0) {
-      rList.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:20px;">No retired drivers on record.</p>';
-    } else {
-      retiredDrivers.forEach(function(driver) {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid #e5d5cc;gap:8px;';
-        const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
-        const name = document.createElement('div');
-        name.style.cssText = 'font-weight:800;font-size:15px;color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,0.6);';
-        name.textContent = driver.lastName + ', ' + driver.firstName;
-        const meta = document.createElement('div');
-        meta.style.cssText = 'font-size:12px;color:#FFB500;margin-top:3px;font-weight:600;';
-        const loc = driver.location === 'Mebane' ? 'MEBNC' : 'GRENC';
-        const since = driver.retiredAt ? new Date(driver.retiredAt).toLocaleDateString() : 'Unknown';
-        meta.textContent = loc + ' · Retired ' + since;
-        info.appendChild(name); info.appendChild(meta);
-        const btnGroup = document.createElement('div'); btnGroup.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
-        const restoreBtn = document.createElement('button');
-        restoreBtn.textContent = '↩ Restore';
-        restoreBtn.style.cssText = 'padding:7px 11px;border-radius:8px;border:1.5px solid #FFB500;background:rgba(255,181,0,0.15);color:#FFB500;font-size:12px;font-weight:700;cursor:pointer;';
-        restoreBtn.addEventListener('click', async function() {
-          restoreBtn.disabled = true; restoreBtn.textContent = '…';
-          const restored = Object.assign({}, driver);
-          delete restored.retired; delete restored.retiredAt; delete restored._docId;
-          const encrypted = await encryptDriver(restored);
-          const { error: err } = await supabase.from('drivers').upsert({ id: driver._docId, data: encrypted });
-          if (err) { alert('Restore failed: ' + err.message); restoreBtn.disabled = false; restoreBtn.textContent = '↩ Restore'; return; }
-          const rKey = driverKey(restored.lastName, restored.firstName);
-          driverSet.add(rKey); driverMap.set(rKey, restored); upsertDriver(restored); applyFilter();
-          row.remove();
-          if (rList.children.length === 0) rList.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:20px;">No retired drivers on record.</p>';
-        });
-        const delBtn = document.createElement('button');
-        delBtn.textContent = '🗑';
-        delBtn.title = 'Permanently delete';
-        delBtn.style.cssText = 'padding:7px 10px;border-radius:8px;border:1.5px solid #f87171;background:rgba(248,113,113,0.15);color:#f87171;font-size:13px;font-weight:700;cursor:pointer;';
-        delBtn.addEventListener('click', function() {
-          deleteBody.textContent = 'Permanently delete ' + driver.lastName + ', ' + driver.firstName + '? This cannot be undone.';
-          deleteModal.classList.add('open');
-          function onConfirm() {
-            supabase.from('drivers').delete().eq('id', driver._docId).then(async function(r) {
-              if (r.error) { alert('Delete failed: ' + r.error.message); return; }
-              await cacheDelete(driver._docId); row.remove();
-              if (rList.children.length === 0) rList.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:20px;">No retired drivers on record.</p>';
-            });
-            deleteModal.classList.remove('open'); cleanup();
-          }
-          function onCancel()  { deleteModal.classList.remove('open'); cleanup(); }
-          function onBackdrop(e) { if (e.target === deleteModal) onCancel(); }
-          function cleanup() {
-            deleteConfirm.removeEventListener('click', onConfirm);
-            deleteCancel.removeEventListener('click', onCancel);
-            deleteModal.removeEventListener('click', onBackdrop);
-          }
-          deleteConfirm.addEventListener('click', onConfirm);
-          deleteCancel.addEventListener('click', onCancel);
-          deleteModal.addEventListener('click', onBackdrop);
-        });
-        btnGroup.appendChild(restoreBtn); btnGroup.appendChild(delBtn);
-        row.appendChild(info); row.appendChild(btnGroup); rList.appendChild(row);
-      });
-    }
-    modal.classList.add('open');
-  }
-
-  // ── Export JSON ───────────────────────────────────────────────
   // ── Export JSON ───────────────────────────────────────────────
   function exportJson() {
     // Normalise phone objects to { digits, display } — the canonical import format.
@@ -2205,7 +2115,7 @@ function initApp() {
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
-  document.getElementById('btnRetired').addEventListener('click', openRetiredModal);
+  document.getElementById('btnNoPhone').addEventListener('click', openNoPhoneModal);
   document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
@@ -2377,7 +2287,8 @@ function initApp() {
         req.onerror   = function() { resolve([]); };
       });
       // Rows store { id, driver } — driver is already decrypted and pre-sorted.
-      return rows.map(function(r) { return r.driver; });
+      // Filter out retired drivers so they never appear in the active list from cache.
+      return rows.map(function(r) { return r.driver; }).filter(function(d) { return !d.retired; });
     } catch(_) { return []; }
   }
 
@@ -2472,10 +2383,11 @@ function initApp() {
           return;
         }
 
-        // Data changed — decrypt, cache, re-render.
-        const drivers = await Promise.all(
+        // Data changed — decrypt, cache, re-render (exclude retired drivers).
+        const allDrivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
+        const drivers = allDrivers.filter(function(d) { return !d.retired; });
         drivers.sort(function(a, b) {
           const ka = (a.lastName + a.firstName).toLowerCase();
           const kb = (b.lastName + b.firstName).toLowerCase();
@@ -2505,7 +2417,17 @@ function initApp() {
             // INSERT or UPDATE
             await cachePut(payload.new);
             const driver = await decryptDriver(payload.new.data);
-            upsertDriver(driver);
+            // If driver was just marked retired, remove from active list
+            if (driver.retired) {
+              const rKey = payload.new.id;
+              if (driverSet.has(rKey)) {
+                driverSet.delete(rKey); driverMap.delete(rKey);
+                const outer = listEl.querySelector('.card-outer[data-key="' + rKey + '"]');
+                if (outer) { animateRemove(outer); allCards = allCards.filter(function(c){ return c !== outer; }); }
+              }
+            } else {
+              upsertDriver(driver);
+            }
             applyFilter();
           }
         }
