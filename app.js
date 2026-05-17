@@ -1594,6 +1594,10 @@ function initApp() {
     setProgress(50, 'Uploading ' + total + ' drivers…');
     importStatus.textContent = 'Uploading ' + total + ' drivers…';
 
+    // Pause the real-time listener during bulk upload — each write would
+    // otherwise trigger a decrypt + re-render, making the import very slow.
+    detachSnapshot();
+
     try {
       const entries = Array.from(incomingMap.entries());
       for (let i = 0; i < entries.length; i += 20) {
@@ -1633,11 +1637,15 @@ function initApp() {
       });
 
       setTimeout(closeImportModal, 3000);
+      // Resume real-time listener — will do one full refresh from Firestore
+      reattachSnapshot();
     } catch(e) {
       importStatus.textContent = '❌ Import failed: ' + e.message;
       importConfirm.disabled = false;
       importConfirm.textContent = 'Import';
       hideProgress();
+      // Resume listener even on failure
+      reattachSnapshot();
     }
   }
 
@@ -1816,9 +1824,19 @@ function initApp() {
   // Fires immediately from IndexedDB cache, then again when server responds.
   // Handles offline gracefully — cached data renders without network.
   let firstSnapshot = true;
+  let snapshotUnsubscribe = null;
+
+  function detachSnapshot() {
+    if (snapshotUnsubscribe) { snapshotUnsubscribe(); snapshotUnsubscribe = null; }
+  }
+
+  function reattachSnapshot() {
+    firstSnapshot = true;
+    snapshotUnsubscribe = attachSnapshot();
+  }
 
   function attachSnapshot() {
-    return onSnapshot(driversCol,
+    const unsub = onSnapshot(driversCol,
       async function(snapshot) {
         removeLoadingMsg();
         if (navigator.onLine) hideOfflineBanner();
@@ -1873,13 +1891,14 @@ function initApp() {
         }
       }
     );
+    return unsub;
   }
 
   signInAnonymously(auth)
-    .then(function() { attachSnapshot(); })
+    .then(function() { snapshotUnsubscribe = attachSnapshot(); })
     .catch(function(err) {
       // Auth failed — try snapshot anyway; persistent cache may serve data
       console.warn('Anonymous auth failed, attempting snapshot anyway:', err);
-      attachSnapshot();
+      snapshotUnsubscribe = attachSnapshot();
     });
 }
