@@ -13,7 +13,13 @@
       "src": "apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "favicon.ico",
@@ -21,6 +27,8 @@
       "type": "image/x-icon"
     }
   ],
-  "categories": ["utilities"],
+  "categories": [
+    "utilities"
+  ],
   "lang": "en-US"
 }

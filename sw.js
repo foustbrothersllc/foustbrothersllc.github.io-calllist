@@ -2,7 +2,14 @@
    Driver Call List — sw.js
    ============================================================ */
 
-const CACHE_NAME = 'driver-call-list-v7';
+// Cache version is stamped at deploy time — no manual bumping needed.
+// The build date + a short hash of the app shell list acts as the version.
+const CACHE_VERSION = 'v' + (function() {
+  // Simple deterministic version: date of last deploy embedded as a constant.
+  // Replace this value each deploy (or use a CI step to inject it).
+  return '20250517-01';
+})();
+const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
 
 const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/',

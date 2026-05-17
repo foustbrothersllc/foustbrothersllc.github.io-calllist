@@ -23,7 +23,7 @@ import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFirestore, collection, doc,
-  setDoc, deleteDoc, getDocs,
+  setDoc, deleteDoc, getDocs, onSnapshot,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager
@@ -479,6 +479,8 @@ function initApp() {
   let editingKey          = null;
   let pendingDeleteKey    = null;
   const selectedKeys      = new Set();
+  // 'last' = "Smith, John"  |  'first' = "John Smith"
+  let nameOrder = localStorage.getItem('dcl_name_order') || 'last';
 
   // 3-version import log
   const UPDATE_LOG_KEY = 'dcl_update_log';
@@ -581,6 +583,33 @@ function initApp() {
     textBtn.innerHTML = '💬 Text';
     box.appendChild(textBtn);
 
+    const copyBtn = document.createElement('button');
+    copyBtn.style.cssText = [
+      'display:flex;align-items:center;justify-content:center;gap:10px;',
+      'padding:14px;border-radius:12px;background:#f5ede8;color:#351C15;',
+      'font-size:16px;font-weight:700;border:1.5px solid #e5d5cc;cursor:pointer;',
+    ].join('');
+    copyBtn.innerHTML = '📋 Copy Number';
+    copyBtn.addEventListener('click', function() {
+      const formatted = formatPhone(digits);
+      navigator.clipboard.writeText(formatted).then(function() {
+        copyBtn.innerHTML = '✅ Copied!';
+        setTimeout(function() { copyBtn.innerHTML = '📋 Copy Number'; }, 1800);
+      }).catch(function() {
+        // Fallback for browsers without clipboard API
+        const ta = document.createElement('textarea');
+        ta.value = formatted;
+        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        copyBtn.innerHTML = '✅ Copied!';
+        setTimeout(function() { copyBtn.innerHTML = '📋 Copy Number'; }, 1800);
+      });
+    });
+    box.appendChild(copyBtn);
+
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
     cancelBtn.style.cssText = [
@@ -664,7 +693,9 @@ function initApp() {
     nameBlock.className = 'card-name-block';
     const nameEl = document.createElement('span');
     nameEl.className = 'name';
-    nameEl.textContent = driver.lastName + ', ' + driver.firstName;
+    nameEl.textContent = nameOrder === 'first'
+      ? driver.firstName + ' ' + driver.lastName
+      : driver.lastName + ', ' + driver.firstName;
     nameBlock.appendChild(nameEl);
     header.appendChild(nameBlock);
 
@@ -832,21 +863,39 @@ function initApp() {
     deleteModal.addEventListener('click',   onBackdrop);
   }
 
-  // ── Render all cards ─────────────────────────────────────────
+  // ── Render all cards (RAF-batched for smooth performance) ────
   function renderCards(drivers) {
     allCards.forEach(c => c.remove());
     driverSet.clear();
     driverMap.clear();
     allCards = [];
-    const frag = document.createDocumentFragment();
-    drivers.forEach(function(driver) {
-      registerDriver(driver);
-      const outer = buildCard(driver);
-      frag.appendChild(outer);
-      allCards.push(outer);
-    });
-    listEl.insertBefore(frag, noResults);
-    applyFilter();
+
+    const BATCH = 20; // cards per animation frame
+    let index = 0;
+
+    function renderBatch() {
+      const frag = document.createDocumentFragment();
+      const end  = Math.min(index + BATCH, drivers.length);
+      for (let i = index; i < end; i++) {
+        registerDriver(drivers[i]);
+        const outer = buildCard(drivers[i]);
+        frag.appendChild(outer);
+        allCards.push(outer);
+      }
+      listEl.insertBefore(frag, noResults);
+      index = end;
+      if (index < drivers.length) {
+        requestAnimationFrame(renderBatch);
+      } else {
+        applyFilter(); // run filter once all cards are in DOM
+      }
+    }
+
+    if (drivers.length > 0) {
+      requestAnimationFrame(renderBatch);
+    } else {
+      applyFilter();
+    }
   }
 
   // ── Upsert locally + save to Firestore ───────────────────────
@@ -1595,6 +1644,39 @@ function initApp() {
   // ── Event listeners ──────────────────────────────────────────
   searchBox.addEventListener('input',  applyFilter);
   searchBox.addEventListener('search', applyFilter);
+
+  // ── Name order toggle ────────────────────────────────────────
+  (function setupNameToggle() {
+    const filterRow = document.querySelector('.filter-btns');
+    if (!filterRow) return;
+    const btn = document.createElement('button');
+    btn.id = 'btnNameOrder';
+    btn.className = 'filter-btn';
+    btn.style.cssText = 'margin-left:auto;font-size:11px;white-space:nowrap;';
+    function updateLabel() {
+      btn.textContent = nameOrder === 'last' ? '⇄ First Last' : '⇄ Last, First';
+      btn.title = nameOrder === 'last' ? 'Switch to First Last display' : 'Switch to Last, First display';
+    }
+    updateLabel();
+    btn.addEventListener('click', function() {
+      nameOrder = nameOrder === 'last' ? 'first' : 'last';
+      localStorage.setItem('dcl_name_order', nameOrder);
+      updateLabel();
+      // Re-render all name labels without rebuilding cards
+      allCards.forEach(function(outer) {
+        const key = outer.dataset.key;
+        const driver = driverMap.get(key);
+        if (!driver) return;
+        const nameEl = outer.querySelector('.name');
+        if (nameEl) {
+          nameEl.textContent = nameOrder === 'first'
+            ? driver.firstName + ' ' + driver.lastName
+            : driver.lastName + ', ' + driver.firstName;
+        }
+      });
+    });
+    filterRow.appendChild(btn);
+  })();
   filterBtns.forEach(function(btn) {
     btn.addEventListener('click', function() {
       filterBtns.forEach(b => b.classList.remove('active'));
@@ -1726,54 +1808,74 @@ function initApp() {
     }, { passive: true });
   })();
 
-  signInAnonymously(auth).then(async function(userCredential) {
-    const snapshot = await getDocs(driversCol);
-    removeLoadingMsg();
-    hideOfflineBanner();
-    const drivers = [];
-    for (const d of snapshot.docs) {
-      const decrypted = await decryptDriver(d.data());
-      drivers.push(decrypted);
-    }
-    drivers.sort(function(a, b) {
-      const ka = (a.lastName + a.firstName).toLowerCase();
-      const kb = (b.lastName + b.firstName).toLowerCase();
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
-    // If we got data from cache while offline, show the offline banner
-    if (!navigator.onLine && drivers.length > 0) showOfflineBanner();
-    renderCards(drivers);
-  }).catch(async function(err) {
-    // signInAnonymously failed — try getDocs anyway (persistent cache may still work)
-    try {
-      const snapshot = await getDocs(driversCol);
-      removeLoadingMsg();
-      const drivers = [];
-      for (const d of snapshot.docs) {
-        const decrypted = await decryptDriver(d.data());
-        drivers.push(decrypted);
-      }
-      drivers.sort(function(a, b) {
-        const ka = (a.lastName + a.firstName).toLowerCase();
-        const kb = (b.lastName + b.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      if (drivers.length > 0) {
-        showOfflineBanner();
-        renderCards(drivers);
-        return;
-      }
-    } catch(_) { /* fall through to error display */ }
+  // ── Real-time listener via onSnapshot ───────────────────────
+  // Fires immediately from IndexedDB cache, then again when server responds.
+  // Handles offline gracefully — cached data renders without network.
+  let firstSnapshot = true;
 
-    removeLoadingMsg();
-    showOfflineBanner();
-    console.error(err);
-    if (allCards.length === 0) {
-      const p = document.createElement('div');
-      p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
-      p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
-        + '<p style="font-size:13px;color:#7a1a1a;margin:0;">No cached data available. Connect to the internet and pull down to refresh.</p>';
-      listEl.insertBefore(p, noResults);
-    }
-  });
+  function attachSnapshot() {
+    return onSnapshot(driversCol,
+      async function(snapshot) {
+        removeLoadingMsg();
+        if (navigator.onLine) hideOfflineBanner();
+        else if (snapshot.metadata.fromCache) showOfflineBanner();
+
+        const drivers = [];
+        for (const d of snapshot.docs) {
+          const decrypted = await decryptDriver(d.data());
+          drivers.push(decrypted);
+        }
+        drivers.sort(function(a, b) {
+          const ka = (a.lastName + a.firstName).toLowerCase();
+          const kb = (b.lastName + b.firstName).toLowerCase();
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        });
+
+        if (firstSnapshot) {
+          firstSnapshot = false;
+          renderCards(drivers);
+        } else {
+          // Incremental update: only re-render changed docs so edits by
+          // another admin session appear live without a full list rebuild.
+          snapshot.docChanges().forEach(async function(change) {
+            const raw = change.doc.data();
+            const driver = await decryptDriver(raw);
+            if (change.type === 'removed') {
+              const key = driverKey(driver.lastName, driver.firstName);
+              const outer = listEl.querySelector('.card-outer[data-key="' + keyToDocId(key) + '"]')
+                         || listEl.querySelector('.card-outer[data-key="' + key + '"]');
+              driverSet.delete(key);
+              driverMap.delete(key);
+              if (outer) animateRemove(outer);
+              allCards = allCards.filter(c => c !== outer);
+            } else {
+              upsertDriver(driver).catch(console.error);
+            }
+          });
+          applyFilter();
+        }
+      },
+      function(err) {
+        // Snapshot error — show offline state; cached data still visible
+        removeLoadingMsg();
+        showOfflineBanner();
+        console.error('onSnapshot error:', err);
+        if (allCards.length === 0) {
+          const p = document.createElement('div');
+          p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
+          p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
+            + '<p style="font-size:13px;color:#7a1a1a;margin:0;">No cached data available. Connect to the internet and pull down to refresh.</p>';
+          listEl.insertBefore(p, noResults);
+        }
+      }
+    );
+  }
+
+  signInAnonymously(auth)
+    .then(function() { attachSnapshot(); })
+    .catch(function(err) {
+      // Auth failed — try snapshot anyway; persistent cache may serve data
+      console.warn('Anonymous auth failed, attempting snapshot anyway:', err);
+      attachSnapshot();
+    });
 }
