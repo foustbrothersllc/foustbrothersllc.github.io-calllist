@@ -1831,7 +1831,9 @@ function initApp() {
       // Convert Excel to CSV text using SheetJS
       const buffer = await file.arrayBuffer();
       const wb     = XLSX.read(buffer, { type: 'array' });
-      const ws     = wb.Sheets[wb.SheetNames[0]];
+      // Prefer 'Sheet1' if it exists, otherwise use the first sheet
+      const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
+      const ws     = wb.Sheets[sheetName];
       const csv    = XLSX.utils.sheet_to_csv(ws);
       return { fileContent: csv };
     }
