@@ -557,6 +557,41 @@ body {
 }
 .btn-delete-confirm:active { filter: brightness(0.88); }
 
+/* ── Settings Modal rows ── */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brown);
+  margin-bottom: 2px;
+}
+.settings-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.settings-toggle-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--brown-light);
+  color: var(--brown);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.settings-toggle-btn:active { filter: brightness(0.9); }
+
 /* ============================================================
    Dark Mode
    ============================================================ */
@@ -657,4 +692,12 @@ body {
   /* Phone action sheet */
   #phoneActionSheet > div { background: #1e1410; }
   #phoneActionSheet p { color: var(--gold); }
+
+  /* Settings */
+  .settings-row { border-bottom-color: var(--border); }
+  .settings-label { color: var(--gold); }
+  .settings-toggle-btn { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
+
+  /* Import preview */
+  #importPreviewBody { background: #2a1f18; color: #c9a86c; }
 }
