@@ -468,14 +468,38 @@ function initApp() {
   let nameOrder = localStorage.getItem('dcl_name_order') || 'last';
 
   // ── Haptic feedback ──────────────────────────────────────────
+  // Default ON. Stored as 'off' when disabled so new installs get haptics.
   let hapticEnabled = localStorage.getItem('dcl_haptic') !== 'off';
+
+  // iOS doesn't support navigator.vibrate, but a silent AudioContext
+  // impulse triggers the Taptic Engine on most iOS devices.
+  let _audioCtx = null;
+  function _iosHaptic(intensityGain) {
+    try {
+      if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = _audioCtx.createBuffer(1, 1, 22050);
+      const src = _audioCtx.createBufferSource();
+      src.buffer = buf;
+      const gain = _audioCtx.createGain();
+      gain.gain.value = intensityGain;
+      src.connect(gain);
+      gain.connect(_audioCtx.destination);
+      src.start(0);
+    } catch(_) {}
+  }
+
   function haptic(style) {
     if (!hapticEnabled) return;
     if (navigator.vibrate) {
-      if (style === 'light')  navigator.vibrate(8);
-      else if (style === 'medium') navigator.vibrate(20);
-      else if (style === 'heavy')  navigator.vibrate([30, 20, 30]);
-      else navigator.vibrate(10);
+      // Android / non-iOS
+      if (style === 'light')       navigator.vibrate(8);
+      else if (style === 'medium') navigator.vibrate(22);
+      else if (style === 'heavy')  navigator.vibrate([35, 15, 35]);
+      else                         navigator.vibrate(10);
+    } else {
+      // iOS — AudioContext silent impulse triggers Taptic Engine
+      const gain = style === 'heavy' ? 1.0 : style === 'medium' ? 0.5 : 0.1;
+      _iosHaptic(gain);
     }
   }
 
@@ -1899,56 +1923,7 @@ function initApp() {
       applyFilter();
     });
   });
-  (function setupNameToggle() {
-    const filterRow = document.querySelector('.filter-btns');
-    if (!filterRow) return;
-    const btn = document.createElement('button');
-    btn.id = 'btnNameOrder';
-    btn.className = 'filter-btn';
-    btn.style.cssText = 'margin-left:auto;font-size:11px;white-space:nowrap;';
-    function updateLabel() {
-      btn.textContent = nameOrder === 'last' ? '⇄ First Last' : '⇄ Last, First';
-      btn.title = nameOrder === 'last' ? 'Switch to First Last display' : 'Switch to Last, First display';
-    }
-    updateLabel();
-    btn.addEventListener('click', function() {
-      nameOrder = nameOrder === 'last' ? 'first' : 'last';
-      localStorage.setItem('dcl_name_order', nameOrder);
-      updateLabel();
-
-      // Update all name labels
-      allCards.forEach(function(outer) {
-        const key = outer.dataset.key;
-        const driver = driverMap.get(key);
-        if (!driver) return;
-        const nameEl = outer.querySelector('.name');
-        if (nameEl) {
-          nameEl.textContent = nameOrder === 'first'
-            ? driver.firstName + ' ' + driver.lastName
-            : driver.lastName + ', ' + driver.firstName;
-        }
-      });
-
-      // Re-sort cards in the DOM to match the new name order
-      allCards.sort(function(a, b) {
-        const da = driverMap.get(a.dataset.key);
-        const db = driverMap.get(b.dataset.key);
-        if (!da || !db) return 0;
-        const ka = nameOrder === 'first'
-          ? (da.firstName + da.lastName).toLowerCase()
-          : (da.lastName + da.firstName).toLowerCase();
-        const kb = nameOrder === 'first'
-          ? (db.firstName + db.lastName).toLowerCase()
-          : (db.lastName + db.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      // Re-insert in sorted order using a fragment for one reflow
-      const frag = document.createDocumentFragment();
-      allCards.forEach(function(outer) { frag.appendChild(outer); });
-      listEl.insertBefore(frag, noResults);
-    });
-    filterRow.appendChild(btn);
-  })();
+  // (name order toggle moved to Settings modal)
   fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
   panelClose.addEventListener('click', closePanel);
   btnCancel.addEventListener('click', closePanel);
@@ -1984,16 +1959,9 @@ function initApp() {
 
     settingsNameToggle.addEventListener('click', function() {
       haptic('light');
-      // Reuse the existing name toggle logic
       nameOrder = nameOrder === 'last' ? 'first' : 'last';
       localStorage.setItem('dcl_name_order', nameOrder);
       updateNameSub();
-      // Update the ⇄ button in filter row if present
-      const oldBtn = document.getElementById('btnNameOrder');
-      if (oldBtn) {
-        oldBtn.textContent = nameOrder === 'last' ? '⇄ First Last' : '⇄ Last, First';
-        oldBtn.title = nameOrder === 'last' ? 'Switch to First Last display' : 'Switch to Last, First display';
-      }
       // Update all card name labels
       allCards.forEach(function(outer) {
         const key = outer.dataset.key;
