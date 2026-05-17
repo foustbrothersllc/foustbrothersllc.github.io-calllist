@@ -1848,14 +1848,18 @@ function initApp() {
         if (navigator.onLine) hideOfflineBanner();
         else if (snapshot.metadata.fromCache) showOfflineBanner();
 
+        // Skip snapshots that are just the server echoing back our own local writes.
+        const isServerEcho = !firstSnapshot
+          && !snapshot.metadata.fromCache
+          && snapshot.docChanges().every(function(c) { return c.doc.metadata.hasPendingWrites; });
+        if (isServerEcho) return;
+
         if (firstSnapshot) {
-          // First load: decrypt all docs, sort, and render
+          // First load: decrypt ALL drivers in parallel — much faster than sequential awaits.
           firstSnapshot = false;
-          const drivers = [];
-          for (const d of snapshot.docs) {
-            const decrypted = await decryptDriver(d.data());
-            drivers.push(decrypted);
-          }
+          const drivers = await Promise.all(
+            snapshot.docs.map(function(d) { return decryptDriver(d.data()); })
+          );
           drivers.sort(function(a, b) {
             const ka = (a.lastName + a.firstName).toLowerCase();
             const kb = (b.lastName + b.firstName).toLowerCase();
@@ -1863,11 +1867,13 @@ function initApp() {
           });
           renderCards(drivers);
         } else {
-          // Incremental update: process changes sequentially with for..of so
-          // each decrypt is properly awaited before the next, then applyFilter
-          // once at the end — fixes freeze caused by async forEach + early applyFilter.
-          for (const change of snapshot.docChanges()) {
-            const driver = await decryptDriver(change.doc.data());
+          // Incremental update: decrypt changed docs in parallel, then apply to UI once.
+          const changes = snapshot.docChanges();
+          const decrypted = await Promise.all(
+            changes.map(function(c) { return decryptDriver(c.doc.data()); })
+          );
+          changes.forEach(function(change, i) {
+            const driver = decrypted[i];
             if (change.type === 'removed') {
               const key = driverKey(driver.lastName, driver.firstName);
               const outer = listEl.querySelector('.card-outer[data-key="' + keyToDocId(key) + '"]')
@@ -1877,9 +1883,9 @@ function initApp() {
               if (outer) animateRemove(outer);
               allCards = allCards.filter(c => c !== outer);
             } else {
-              await upsertDriver(driver);
+              upsertDriver(driver);
             }
-          }
+          });
           applyFilter();
         }
       },
