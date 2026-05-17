@@ -1401,7 +1401,17 @@ function initApp() {
 
   // ── Export JSON ───────────────────────────────────────────────
   function exportJson() {
-    const drivers = Array.from(driverMap.values());
+    // Normalise phone objects to { digits, display } — the canonical import format.
+    // driverMap stores decrypted objects which are already in this shape, but
+    // guard explicitly so a future storage-format change doesn't silently export
+    // bare { enc } objects that can't be re-imported.
+    const drivers = Array.from(driverMap.values()).map(function(d) {
+      function cleanPhone(p) {
+        if (!p || !p.digits) return null;
+        return { digits: p.digits, display: formatPhone(p.digits) };
+      }
+      return Object.assign({}, d, { phone: cleanPhone(d.phone), altPhone: cleanPhone(d.altPhone) });
+    });
     const blob = new Blob([JSON.stringify(drivers, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -1458,14 +1468,16 @@ function initApp() {
     pwInput.addEventListener('keydown',  function(e) { if (e.key === 'Enter') confirmBtn.click(); });
 
     confirmBtn.addEventListener('click', function() {
-      if (pwInput.value !== 'GRENC2749') {
-        errorEl.textContent = '\u274c Incorrect password.';
-        pwInput.value = '';
-        pwInput.focus();
-        return;
-      }
-      backdrop.remove();
-      runSeed();
+      sha256(pwInput.value).then(function(hash) {
+        if (hash !== '4dab32574ba13e302196cb1344d3369bfee840d40724231c788d688ef1073a0b') {
+          errorEl.textContent = '\u274c Incorrect password.';
+          pwInput.value = '';
+          pwInput.focus();
+          return;
+        }
+        backdrop.remove();
+        runSeed();
+      });
     });
   }
 
@@ -1829,18 +1841,21 @@ function initApp() {
   const IDB_STORE   = 'drivers';
   const IDB_VERSION = 2;
 
-  function openCache() {
-    return new Promise(function(resolve, reject) {
-      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-      req.onupgradeneeded = function(e) {
-        // Delete old store (v1, encrypted) if it exists, then recreate clean.
-        try { e.target.result.deleteObjectStore(IDB_STORE); } catch(_) {}
-        e.target.result.createObjectStore(IDB_STORE, { keyPath: 'id' });
-      };
-      req.onsuccess = function(e) { resolve(e.target.result); };
-      req.onerror   = function(e) { reject(e.target.error); };
-    });
-  }
+  // Single shared connection — opened once, reused for every read/write.
+  // Previously openCache() was called fresh per operation, paying the open
+  // overhead on every cachePut/cacheDelete/cacheGetAll call.
+  const _dbPromise = new Promise(function(resolve, reject) {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = function(e) {
+      // Delete old store (v1, encrypted) if it exists, then recreate clean.
+      try { e.target.result.deleteObjectStore(IDB_STORE); } catch(_) {}
+      e.target.result.createObjectStore(IDB_STORE, { keyPath: 'id' });
+    };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror   = function(e) { reject(e.target.error); };
+  });
+
+  function openCache() { return _dbPromise; }
 
   // Returns pre-sorted array of decrypted driver objects, ready to render.
   async function cacheGetAll() {
