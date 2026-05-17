@@ -1669,10 +1669,37 @@ function initApp() {
   importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
 
   // ── Event listeners ──────────────────────────────────────────
-  searchBox.addEventListener('input',  applyFilter);
-  searchBox.addEventListener('search', applyFilter);
+  const searchClearBtn = document.getElementById('searchClear');
 
-  // ── Name order toggle ────────────────────────────────────────
+  function updateClearBtn() {
+    if (searchClearBtn) searchClearBtn.style.display = searchBox.value ? 'block' : 'none';
+  }
+
+  searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
+  searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
+
+  if (searchClearBtn) {
+    searchClearBtn.addEventListener('click', function() {
+      searchBox.value = '';
+      updateClearBtn();
+      applyFilter();
+      searchBox.focus();
+    });
+  }
+
+  // Clearing search on filter change so results aren't confusingly stale
+  filterBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.loc;
+      if (searchBox.value) {
+        searchBox.value = '';
+        updateClearBtn();
+      }
+      applyFilter();
+    });
+  });
   (function setupNameToggle() {
     const filterRow = document.querySelector('.filter-btns');
     if (!filterRow) return;
@@ -1723,14 +1750,6 @@ function initApp() {
     });
     filterRow.appendChild(btn);
   })();
-  filterBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeFilter = btn.dataset.loc;
-      applyFilter();
-    });
-  });
   fabAdd.addEventListener('click', openAddPanel);
   panelClose.addEventListener('click', closePanel);
   btnCancel.addEventListener('click', closePanel);
@@ -1773,21 +1792,42 @@ function initApp() {
     const b = document.getElementById('offlineBanner');
     if (b) b.remove();
   }
-  window.addEventListener('online',  hideOfflineBanner);
+  function showOnlineToast() {
+    const existing = document.getElementById('onlineToast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'onlineToast';
+    toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:999;background:#166534;color:#fff;border-radius:40px;padding:10px 20px;font-size:13px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,0.3);white-space:nowrap;pointer-events:none;transition:opacity 0.4s ease;';
+    toast.textContent = '✅ Back online — refreshed';
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.style.opacity = '0'; }, 2000);
+    setTimeout(function() { toast.remove(); }, 2400);
+  }
+
+  window.addEventListener('online', function() {
+    hideOfflineBanner();
+    // Soft re-fetch so data is current after coming back online
+    detachSnapshot();
+    reattachSnapshot();
+    showOnlineToast();
+  });
   window.addEventListener('offline', showOfflineBanner);
   if (!navigator.onLine) showOfflineBanner();
 
   // ── Pull-to-refresh (iOS standalone PWA safe) ────────────────
   (function setupPullToRefresh() {
-    const isStandalone = window.navigator.standalone === true
-      || window.matchMedia('(display-mode: standalone)').matches;
-
     function doRefresh() {
-      if (isStandalone) {
-        window.location.href = window.location.pathname + '?r=' + Date.now();
-      } else {
-        window.location.reload(true);
-      }
+      // Soft refresh — re-fetch from Supabase without reloading the page.
+      // Much faster than a full reload since the app shell and IDB cache stay warm.
+      const ind = document.getElementById('ptrIndicator');
+      if (ind) ind.textContent = '🔄 Refreshing…';
+      detachSnapshot();
+      reattachSnapshot();
+      setTimeout(function() {
+        if (ind) {
+          ind.style.transform = 'translateY(-100%)';
+        }
+      }, 800);
     }
 
     let startY = 0;
