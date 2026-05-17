@@ -58,7 +58,6 @@
           <h1>Driver Call List</h1>
           <span class="header-sub">Click-to-Call Directory</span>
         </div>
-        <button id="btnSettings" class="btn-header-icon" title="Settings">⚙️</button>
         <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
         <button id="btnAdminLogoutHeader" class="btn-header-icon" title="Admin logout" style="display:none;border-color:rgba(255,100,100,0.5);color:rgba(255,150,150,0.85);">🔓</button>
       </div>
@@ -203,35 +202,6 @@
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="dupClose">Close</button>
           <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div class="modal-backdrop" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
-      <div class="modal" style="max-width:340px;border-top-color:#FFB500;">
-        <div class="modal-icon">⚙️</div>
-        <h2 class="modal-title" id="settingsModalTitle">Settings</h2>
-        <div style="display:flex;flex-direction:column;gap:0;text-align:left;margin-bottom:18px;">
-          <!-- Name order -->
-          <div class="settings-row" id="settingsNameRow">
-            <div>
-              <div class="settings-label">Name Display</div>
-              <div class="settings-sub" id="settingsNameSub">Last, First</div>
-            </div>
-            <button class="settings-toggle-btn" id="settingsNameToggle">Switch</button>
-          </div>
-          <!-- Haptic feedback -->
-          <div class="settings-row">
-            <div>
-              <div class="settings-label">Haptic Feedback</div>
-              <div class="settings-sub">Vibration on taps &amp; actions</div>
-            </div>
-            <button class="settings-toggle-btn" id="settingsHapticToggle" data-on="false">Off</button>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn-modal-cancel" id="settingsClose">Done</button>
         </div>
       </div>
     </div>
