@@ -1436,6 +1436,59 @@ function initApp() {
   }
 
 
+  function openNoPhoneModal() {
+    // Reuse the dup modal but only show the no-phone section
+    dupResults.innerHTML = '';
+    window.__retiredKeysToDelete = [];
+    dupDeleteAll.style.display = 'none';
+
+    const noPhone = [];
+    driverMap.forEach(function(d, key) {
+      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
+    });
+
+    const secHeader = document.createElement('p');
+    secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
+    secHeader.textContent = '📵 No Phone Number (' + noPhone.length + ')';
+    dupResults.appendChild(secHeader);
+
+    if (noPhone.length === 0) {
+      const okEl = document.createElement('p');
+      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:16px;font-size:13px;';
+      okEl.textContent = '✅ All drivers have at least one phone number.';
+      dupResults.appendChild(okEl);
+    } else {
+      noPhone.sort(function(a, b) {
+        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      noPhone.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+      dupDeleteAll.style.display = noPhone.length > 0 ? 'block' : 'none';
+    }
+
+    dupModal.classList.add('open');
+  }
+
   function openDupModal() {
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
@@ -1549,6 +1602,55 @@ function initApp() {
         dupResults.appendChild(row);
       });
     }
+    // ── Section 3: No phone number on file ───────────────────────
+    const noPhone = [];
+    driverMap.forEach(function(d, key) {
+      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
+    });
+
+    const divider2 = document.createElement('div');
+    divider2.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+    dupResults.appendChild(divider2);
+
+    const secHeader3 = document.createElement('p');
+    secHeader3.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
+    secHeader3.textContent = '📵 No Phone Number (' + noPhone.length + ')';
+    dupResults.appendChild(secHeader3);
+
+    if (noPhone.length === 0) {
+      const okEl2 = document.createElement('p');
+      okEl2.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
+      okEl2.textContent = '✅ All drivers have at least one phone number.';
+      dupResults.appendChild(okEl2);
+    } else {
+      noPhone.sort(function(a, b) {
+        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      noPhone.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:13px;color:#ffffff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+      dupDeleteAll.style.display = 'block';
+    }
+
     dupModal.classList.add('open');
   }
 
@@ -1935,6 +2037,7 @@ function initApp() {
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
+  document.getElementById('btnNoPhone').addEventListener('click', openNoPhoneModal);
   document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
