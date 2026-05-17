@@ -1962,30 +1962,15 @@ function initApp() {
       nameOrder = nameOrder === 'last' ? 'first' : 'last';
       localStorage.setItem('dcl_name_order', nameOrder);
       updateNameSub();
-      // Update all card name labels
-      allCards.forEach(function(outer) {
-        const key = outer.dataset.key;
-        const driver = driverMap.get(key);
-        if (!driver) return;
-        const nameEl = outer.querySelector('.name');
-        if (nameEl) {
-          nameEl.textContent = nameOrder === 'first'
-            ? driver.firstName + ' ' + driver.lastName
-            : driver.lastName + ', ' + driver.firstName;
-        }
-      });
-      // Re-sort cards
-      allCards.sort(function(a, b) {
-        const da = driverMap.get(a.dataset.key);
-        const db = driverMap.get(b.dataset.key);
-        if (!da || !db) return 0;
-        const ka = nameOrder === 'first' ? (da.firstName + da.lastName).toLowerCase() : (da.lastName + da.firstName).toLowerCase();
-        const kb = nameOrder === 'first' ? (db.firstName + db.lastName).toLowerCase() : (db.lastName + db.firstName).toLowerCase();
+
+      // Re-sort the driver list and re-render — simpler and bulletproof
+      const drivers = Array.from(driverMap.values());
+      drivers.sort(function(a, b) {
+        const ka = nameOrder === 'first' ? (a.firstName + a.lastName).toLowerCase() : (a.lastName + a.firstName).toLowerCase();
+        const kb = nameOrder === 'first' ? (b.firstName + b.lastName).toLowerCase() : (b.lastName + b.firstName).toLowerCase();
         return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
-      const frag = document.createDocumentFragment();
-      allCards.forEach(function(outer) { frag.appendChild(outer); });
-      listEl.insertBefore(frag, noResults);
+      renderCards(drivers);
     });
 
     hapticToggle.addEventListener('click', function() {
