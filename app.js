@@ -815,24 +815,16 @@ function initApp() {
   function confirmBulkDelete() {
     if (selectedKeys.size === 0) return;
     const count = selectedKeys.size;
-    deleteBody.textContent = 'Mark ' + count + ' driver' + (count > 1 ? 's' : '') + ' as retired? They will be hidden from the list but kept in the database.';
+    deleteBody.textContent = 'Permanently delete ' + count + ' driver' + (count > 1 ? 's' : '') + '? This cannot be undone.';
     deleteModal.classList.add('open');
 
     function onConfirm() {
       Array.from(selectedKeys).forEach(function(key) {
-        const driver = driverMap.get(key);
         const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
         driverSet.delete(key);
         driverMap.delete(key);
         if (outer) animateRemove(outer);
-        if (driver) {
-          const retiredDriver = { ...driver, retired: true, retiredAt: new Date().toISOString() };
-          encryptDriver(retiredDriver).then(function(encrypted) {
-            supabase.from('drivers').upsert({ id: keyToDocId(key), data: encrypted })
-              .then(function({error}){ if(error) console.error(error); });
-          });
-        }
-        cacheDelete(keyToDocId(key));
+        supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
       });
       selectedKeys.clear();
       updateBulkBar();
@@ -934,7 +926,7 @@ function initApp() {
     if (!driver) return;
     haptic('heavy');
 
-    // Remove from active UI immediately
+    // Immediately remove from UI
     driverSet.delete(key);
     driverMap.delete(key);
     const savedDriver = { ...driver };
@@ -943,14 +935,9 @@ function initApp() {
     applyFilter();
 
     showUndoToast(
-      '🏷 ' + savedDriver.lastName + ', ' + savedDriver.firstName + ' marked retired',
+      '🗑 ' + savedDriver.lastName + ', ' + savedDriver.firstName + ' deleted',
       function onCommit() {
-        // Mark retired in Supabase — preserve the record so future imports skip them
-        const retiredDriver = { ...savedDriver, retired: true, retiredAt: new Date().toISOString() };
-        encryptDriver(retiredDriver).then(function(encrypted) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: encrypted })
-            .then(function({error}){ if(error) console.error(error); });
-        });
+        supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
         cacheDelete(keyToDocId(key));
       },
       function onUndo() {
@@ -1672,150 +1659,22 @@ function initApp() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
     keys.forEach(function(key) {
-      const driver = driverMap.get(key);
       const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
       driverSet.delete(key);
       driverMap.delete(key);
       if (outer) animateRemove(outer);
-      allCards = allCards.filter(c => c !== outer);
-      if (driver) {
-        const retiredDriver = { ...driver, retired: true, retiredAt: new Date().toISOString() };
-        encryptDriver(retiredDriver).then(function(encrypted) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: encrypted })
-            .then(function({error}){ if(error) console.error(error); });
-        });
-      }
-      cacheDelete(keyToDocId(key));
+      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
     });
     applyFilter();
     dupModal.classList.remove('open');
   });
 
-  // ── Retired Drivers Modal ───────────────────────────────────
-  async function openRetiredModal() {
-    // Fetch all drivers from Supabase and filter to retired only
-    const { data: allRows, error } = await supabase.from('drivers').select('id, data');
-    if (error) { alert('Could not load retired drivers: ' + error.message); return; }
-
-    const retiredDrivers = [];
-    await Promise.all((allRows || []).map(async function(row) {
-      const d = await decryptDriver(row.data);
-      if (d.retired) retiredDrivers.push({ ...d, _docId: row.id });
-    }));
-
-    retiredDrivers.sort(function(a, b) {
-      const ka = (a.lastName + a.firstName).toLowerCase();
-      const kb = (b.lastName + b.firstName).toLowerCase();
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
-
-    // Build or reuse modal
-    let modal = document.getElementById('retiredModal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'retiredModal';
-      modal.className = 'modal-backdrop';
-      modal.setAttribute('role', 'dialog');
-      modal.setAttribute('aria-modal', 'true');
-      modal.innerHTML = [
-        '<div class="modal" style="max-width:460px;border-top-color:#7a6055;">',
-          '<div class="modal-icon">🏷</div>',
-          '<h2 class="modal-title">Retired Drivers</h2>',
-          '<div id="retiredList" style="max-height:55vh;overflow-y:auto;text-align:left;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>',
-          '<div class="modal-actions">',
-            '<button class="btn-modal-cancel" id="retiredClose">Close</button>',
-          '</div>',
-        '</div>',
-      ].join('');
-      document.getElementById('appWrapper').appendChild(modal);
-      document.getElementById('retiredClose').addEventListener('click', function() { modal.classList.remove('open'); });
-      modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
-    }
-
-    const listEl2 = document.getElementById('retiredList');
-    listEl2.innerHTML = '';
-
-    if (retiredDrivers.length === 0) {
-      listEl2.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:16px;">No retired drivers on record.</p>';
-    } else {
-      retiredDrivers.forEach(function(driver) {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid #e5d5cc;gap:8px;';
-
-        const info = document.createElement('div');
-        info.style.cssText = 'flex:1;min-width:0;';
-        const name = document.createElement('div');
-        name.style.cssText = 'font-weight:700;font-size:14px;color:#351C15;';
-        name.textContent = driver.lastName + ', ' + driver.firstName;
-        const meta = document.createElement('div');
-        meta.style.cssText = 'font-size:11px;color:#7a6055;margin-top:2px;';
-        const loc = driver.location === 'Mebane' ? 'MEBNC' : 'GRENC';
-        const since = driver.retiredAt ? new Date(driver.retiredAt).toLocaleDateString() : 'Unknown';
-        meta.textContent = loc + ' · Retired ' + since;
-        info.appendChild(name);
-        info.appendChild(meta);
-
-        const btnGroup = document.createElement('div');
-        btnGroup.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
-
-        // Restore button
-        const restoreBtn = document.createElement('button');
-        restoreBtn.textContent = '↩ Restore';
-        restoreBtn.style.cssText = 'padding:6px 10px;border-radius:8px;border:1.5px solid #351C15;background:#f5ede8;color:#351C15;font-size:12px;font-weight:700;cursor:pointer;';
-        restoreBtn.addEventListener('click', async function() {
-          restoreBtn.disabled = true;
-          restoreBtn.textContent = '…';
-          const restored = { ...driver };
-          delete restored.retired;
-          delete restored.retiredAt;
-          delete restored._docId;
-          const encrypted = await encryptDriver(restored);
-          const { error: err } = await supabase.from('drivers').upsert({ id: driver._docId, data: encrypted });
-          if (err) { alert('Restore failed: ' + err.message); restoreBtn.disabled = false; restoreBtn.textContent = '↩ Restore'; return; }
-          // Add back to active list
-          const key = driverKey(restored.lastName, restored.firstName);
-          driverSet.add(key);
-          driverMap.set(key, restored);
-          upsertDriver(restored);
-          applyFilter();
-          row.remove();
-          if (listEl2.children.length === 0) {
-            listEl2.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:16px;">No retired drivers on record.</p>';
-          }
-        });
-
-        // Permanently delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = '🗑';
-        deleteBtn.title = 'Permanently delete';
-        deleteBtn.style.cssText = 'padding:6px 10px;border-radius:8px;border:1.5px solid #b91c1c;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;';
-        deleteBtn.addEventListener('click', async function() {
-          if (!confirm('Permanently delete ' + driver.lastName + ', ' + driver.firstName + '? This cannot be undone.')) return;
-          deleteBtn.disabled = true;
-          const { error: err } = await supabase.from('drivers').delete().eq('id', driver._docId);
-          if (err) { alert('Delete failed: ' + err.message); deleteBtn.disabled = false; return; }
-          await cacheDelete(driver._docId);
-          row.remove();
-          if (listEl2.children.length === 0) {
-            listEl2.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:16px;">No retired drivers on record.</p>';
-          }
-        });
-
-        btnGroup.appendChild(restoreBtn);
-        btnGroup.appendChild(deleteBtn);
-        row.appendChild(info);
-        row.appendChild(btnGroup);
-        listEl2.appendChild(row);
-      });
-    }
-
-    modal.classList.add('open');
-  }
-
   // ── Export JSON ───────────────────────────────────────────────
   function exportJson() {
-    // Export active drivers only — retired drivers stay in Supabase but are excluded.
-    // driverMap only contains active drivers (retired are filtered on load).
+    // Normalise phone objects to { digits, display } — the canonical import format.
+    // driverMap stores decrypted objects which are already in this shape, but
+    // guard explicitly so a future storage-format change doesn't silently export
+    // bare { enc } objects that can't be re-imported.
     const drivers = Array.from(driverMap.values()).map(function(d) {
       function cleanPhone(p) {
         if (!p || !p.digits) return null;
@@ -1969,14 +1828,29 @@ function initApp() {
     }
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      // Convert Excel to CSV text using SheetJS
-      const buffer = await file.arrayBuffer();
-      const wb     = XLSX.read(buffer, { type: 'array' });
-      // Prefer 'Sheet1' if it exists, otherwise use the first sheet
+      // Parse Excel directly — no AI needed.
+      // Columns: Last Name, First Name, Cell Phone, Secondary/Emergency
+      // Prefers 'Sheet1' (main driver list) over other sheets.
+      const buffer    = await file.arrayBuffer();
+      const wb        = XLSX.read(buffer, { type: 'array' });
       const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
-      const ws     = wb.Sheets[sheetName];
-      const csv    = XLSX.utils.sheet_to_csv(ws);
-      return { fileContent: csv };
+      const ws        = wb.Sheets[sheetName];
+      const rows      = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      const SKIP_WORDS = /last\s*name|first\s*name|employee|name/i;
+      const drivers = [];
+      rows.forEach(function(row) {
+        const last  = String(row[0] || '').trim();
+        const first = String(row[1] || '').trim();
+        const phone = String(row[2] || '').trim();
+        const alt   = String(row[3] || '').trim();
+        if (!last || !first) return;
+        if (SKIP_WORDS.test(last) || SKIP_WORDS.test(first)) return;
+        function cleanNum(s) { return s.replace(/\s*(E|C|2nd|1st|call\s*1st|emergency|cell).*/i, '').trim(); }
+        drivers.push({ lastName: last, firstName: first, rawPhone: cleanNum(phone), rawAlt: cleanNum(alt) });
+      });
+
+      return { fileType: 'xlsx', drivers };
     }
 
     if (name.endsWith('.json')) {
@@ -2003,46 +1877,37 @@ function initApp() {
     try {
       const prepared = await prepareFileForAI(file);
 
+      function makePhone(raw) {
+        if (!raw) return null;
+        const digits = normalisePhone(raw);
+        return digits ? { digits, display: formatPhone(digits) } : null;
+      }
+
       if (prepared.fileType === 'json') {
-        // Legacy path — no AI needed
+        // Legacy JSON path
         newDrivers = prepared.drivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
         setProgress(35, 'JSON parsed…');
-      } else {
-        // ── Send to Supabase Edge Function → Gemini ──────────
-        importStatus.textContent = '🤖 AI is reading your file…';
-        setProgress(20, 'Sending to AI…');
 
-        const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
-          body: { fileContent: prepared.fileContent },
-          headers: { Authorization: 'Bearer ' + SUPABASE_KEY },
-        });
+      } else if (prepared.fileType === 'xlsx') {
+        // Direct Excel parse — no AI, instant
+        setProgress(30, 'Parsed ' + prepared.drivers.length + ' rows…');
+        importStatus.textContent = 'Parsed ' + prepared.drivers.length + ' drivers from Excel…';
 
-        if (fnError) throw new Error('AI processing failed: ' + fnError.message);
-        if (fnData.error) throw new Error('AI error: ' + fnData.error);
-        if (!fnData.drivers || fnData.drivers.length === 0) {
-          throw new Error('AI found no driver records in the file. Check the file has driver data.');
-        }
-
-        setProgress(35, 'AI found ' + fnData.drivers.length + ' drivers…');
-        importStatus.textContent = '✅ AI found ' + fnData.drivers.length + ' drivers — reviewing…';
-
-        // Normalise location values and phone objects
-        newDrivers = fnData.drivers.map(function(d) {
-          function cleanPhone(p) {
-            if (!p || !p.digits) return null;
-            const digits = normalisePhone(p.digits);
-            return digits ? { digits, display: formatPhone(digits) } : null;
-          }
+        newDrivers = prepared.drivers.map(function(d) {
           return {
-            lastName:  (d.lastName  || '').trim(),
-            firstName: (d.firstName || '').trim(),
-            location:  normaliseSlic(d.location || 'Greensboro'),
-            phone:     cleanPhone(d.phone),
-            altPhone:  cleanPhone(d.altPhone),
+            lastName:  d.lastName,
+            firstName: d.firstName,
+            location:  'Greensboro', // default; Excel sheet doesn't include location column
+            phone:     makePhone(d.rawPhone),
+            altPhone:  makePhone(d.rawAlt),
           };
         }).filter(function(d) { return d.lastName && d.firstName; });
 
-        if (newDrivers.length === 0) throw new Error('No valid driver records after processing.');
+        if (newDrivers.length === 0) throw new Error('No valid driver records found in the Excel file.');
+        setProgress(35, 'Found ' + newDrivers.length + ' drivers…');
+
+      } else {
+        throw new Error('Unsupported file type. Please use Excel (.xlsx) or JSON.');
       }
     } catch(e) {
       importStatus.textContent = '❌ ' + e.message;
@@ -2156,22 +2021,6 @@ function initApp() {
     // otherwise trigger a decrypt + re-render, making the import very slow.
     detachSnapshot();
 
-    // Fetch retired IDs from Supabase so we can skip them during import
-    let retiredIds = new Set();
-    try {
-      const { data: allRows } = await supabase.from('drivers').select('id, data');
-      if (allRows) {
-        await Promise.all(allRows.map(async function(row) {
-          const d = await decryptDriver(row.data);
-          if (d.retired) retiredIds.add(row.id);
-        }));
-      }
-    } catch(e) { console.warn('Could not fetch retired list:', e); }
-
-    // Remove retired drivers from the incoming map so they stay retired
-    retiredIds.forEach(function(id) { incomingMap.delete(id); });
-    const activeTotal = incomingMap.size;
-
     try {
       const entries = Array.from(incomingMap.entries());
       for (let i = 0; i < entries.length; i += 20) {
@@ -2181,9 +2030,9 @@ function initApp() {
           return supabase.from('drivers').upsert({ id, data: encrypted }).then(function({error}){ if(error) throw new Error(error.message); });
         }));
         done += batch.length;
-        const pct = 50 + Math.round((done / activeTotal) * 40);
-        setProgress(pct, 'Uploading… ' + done + ' / ' + activeTotal);
-        importStatus.textContent = 'Uploading… ' + done + ' / ' + activeTotal;
+        const pct = 50 + Math.round((done / total) * 40);
+        setProgress(pct, 'Uploading… ' + done + ' / ' + total);
+        importStatus.textContent = 'Uploading… ' + done + ' / ' + total;
         addWrites(batch.length);
       }
 
@@ -2272,7 +2121,6 @@ function initApp() {
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
-  document.getElementById('btnRetired').addEventListener('click', openRetiredModal);
   document.getElementById('btnNoPhone').addEventListener('click', openNoPhoneModal);
   document.getElementById('btnExport').addEventListener('click', exportJson);
 
@@ -2506,8 +2354,8 @@ function initApp() {
     cacheGetAll().then(function(drivers) {
       if (drivers.length === 0) return; // nothing cached yet — wait for network
       removeLoadingMsg();
-      // Filter retired drivers from active list
-      renderCards(drivers.filter(function(d) { return !d.retired; }));
+      // drivers is already sorted (pre-sorted on write) — no sort needed here
+      renderCards(drivers);
       cacheRendered = true;
       firstSnapshot = false;
     });
@@ -2541,11 +2389,9 @@ function initApp() {
         }
 
         // Data changed — decrypt, cache, re-render.
-        const allDrivers = await Promise.all(
+        const drivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
-        // Filter out retired drivers from the active list
-        const drivers = allDrivers.filter(function(d) { return !d.retired; });
         drivers.sort(function(a, b) {
           const ka = (a.lastName + a.firstName).toLowerCase();
           const kb = (b.lastName + b.firstName).toLowerCase();
@@ -2575,19 +2421,7 @@ function initApp() {
             // INSERT or UPDATE
             await cachePut(payload.new);
             const driver = await decryptDriver(payload.new.data);
-            if (driver.retired) {
-              // Retired driver updated — make sure they're removed from active UI
-              const key = payload.new.id;
-              if (driverSet.has(key)) {
-                driverSet.delete(key);
-                driverMap.delete(key);
-                const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
-                if (outer) animateRemove(outer);
-                allCards = allCards.filter(c => c !== outer);
-              }
-            } else {
-              upsertDriver(driver);
-            }
+            upsertDriver(driver);
             applyFilter();
           }
         }
