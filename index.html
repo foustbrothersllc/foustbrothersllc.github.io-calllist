@@ -95,7 +95,6 @@
         <button id="btnImport"    class="btn-admin">📋 Import</button>
         <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
         <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
-        <button id="btnNoPhone"   class="btn-admin">📵 No Phone</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
     </header>
@@ -197,15 +196,29 @@
       </div>
     </div>
 
-    <!-- Duplicate Scan Modal -->
+    <!-- List Cleanup Modal -->
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
         <div class="modal-icon">🧹</div>
         <h2 class="modal-title">List Cleanup</h2>
-        <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
+        <div id="dupResults" style="max-height:55vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
+        <div class="modal-actions" style="flex-wrap:wrap;gap:6px;">
+          <button class="btn-modal-cancel" id="dupClose" style="flex:1;">Close</button>
+          <button class="btn-delete-confirm" id="dupRetireSelected" style="background:#7a6055;display:none;flex:1.5;">🏷 Retire Selected</button>
+          <button class="btn-delete-confirm" id="dupDeleteSelected" style="background:#b91c1c;display:none;flex:1.5;">🗑 Delete Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Retire Confirmation Modal -->
+    <div class="modal-backdrop" id="retireConfirmModal" role="dialog" aria-modal="true">
+      <div class="modal" style="max-width:360px;border-top-color:#7a6055;">
+        <div class="modal-icon">🏷</div>
+        <h2 class="modal-title">Mark as Retired?</h2>
+        <p class="modal-body" id="retireConfirmBody">This driver will be hidden from the active list and kept in the retired records.</p>
         <div class="modal-actions">
-          <button class="btn-modal-cancel" id="dupClose">Close</button>
-          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">🏷 Retire Selected</button>
+          <button class="btn-modal-cancel" id="retireConfirmCancel">Cancel</button>
+          <button class="btn-delete-confirm" id="retireConfirmOk" style="background:#7a6055;">Mark Retired</button>
         </div>
       </div>
     </div>
@@ -220,19 +233,6 @@
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="importPreviewCancel">Cancel</button>
           <button class="btn-save" id="importPreviewConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Confirm Import</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Retire Confirmation Modal -->
-    <div class="modal-backdrop" id="retireConfirmModal" role="dialog" aria-modal="true">
-      <div class="modal" style="max-width:360px;border-top-color:#7a6055;">
-        <div class="modal-icon">🏷</div>
-        <h2 class="modal-title">Mark as Retired?</h2>
-        <p class="modal-body" id="retireConfirmBody">This driver will be hidden from the active list and kept in the retired records.</p>
-        <div class="modal-actions">
-          <button class="btn-modal-cancel" id="retireConfirmCancel">Cancel</button>
-          <button class="btn-delete-confirm" id="retireConfirmOk" style="background:#7a6055;">Mark Retired</button>
         </div>
       </div>
     </div>
