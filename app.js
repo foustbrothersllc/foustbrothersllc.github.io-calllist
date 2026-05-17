@@ -1801,27 +1801,39 @@ function initApp() {
   }
   function closeImportModal() { importModal.classList.remove('open'); }
 
-  // ── Convert file to what the Edge Function expects ───────────
+  // ── Convert file to plain text for Groq Edge Function ────────
   async function prepareFileForAI(file) {
     const name = file.name.toLowerCase();
 
     if (name.endsWith('.pdf')) {
-      // Send PDF as base64 directly to Gemini via Edge Function
-      const buffer = await file.arrayBuffer();
-      const bytes  = new Uint8Array(buffer);
-      let binary   = '';
-      bytes.forEach(function(b) { binary += String.fromCharCode(b); });
-      return { fileType: 'pdf', fileContent: btoa(binary) };
+      // Extract text from PDF using pdf.js, then send as plain text
+      const items = await extractTextFromPdf(file);
+      // Reconstruct readable text from position-aware items
+      const lines = [];
+      let currentY = null;
+      let currentLine = [];
+      items.forEach(function(item) {
+        if (!item.str) return;
+        const y = Math.round(item.y);
+        if (currentY === null) currentY = y;
+        if (Math.abs(y - currentY) > 6) {
+          if (currentLine.length) lines.push(currentLine.join(' '));
+          currentLine = [];
+          currentY = y;
+        }
+        currentLine.push(item.str);
+      });
+      if (currentLine.length) lines.push(currentLine.join(' '));
+      return { fileContent: lines.join('\n') };
     }
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
       // Convert Excel to CSV text using SheetJS
       const buffer = await file.arrayBuffer();
       const wb     = XLSX.read(buffer, { type: 'array' });
-      // Grab the first sheet
       const ws     = wb.Sheets[wb.SheetNames[0]];
       const csv    = XLSX.utils.sheet_to_csv(ws);
-      return { fileType: 'excel', fileContent: csv };
+      return { fileContent: csv };
     }
 
     if (name.endsWith('.json')) {
@@ -1858,7 +1870,7 @@ function initApp() {
         setProgress(20, 'Sending to AI…');
 
         const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
-          body: { fileType: prepared.fileType, fileContent: prepared.fileContent },
+          body: { fileContent: prepared.fileContent },
         });
 
         if (fnError) throw new Error('AI processing failed: ' + fnError.message);
