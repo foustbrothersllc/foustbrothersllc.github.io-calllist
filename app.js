@@ -978,7 +978,7 @@ function initApp() {
   function showPanel() {
     panelOverlay.classList.add('visible');
     addPanel.classList.add('open');
-    setTimeout(function() { inputLastName.focus(); }, 350);
+    setTimeout(function() { inputFirstName.focus(); }, 350);
   }
   function closePanel() {
     addPanel.classList.remove('open');
