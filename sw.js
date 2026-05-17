@@ -2,7 +2,7 @@
    Driver Call List — sw.js
    ============================================================ */
 const CACHE_VERSION = 'v' + (function() {
-  return '20250517-06';
+  return '20250517-07';
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
 const APP_SHELL = [
@@ -10,6 +10,7 @@ const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/index.html',
   'https://foustbrothersllc.github.io/callist/app.js',
   'https://foustbrothersllc.github.io/callist/styles.css',
+  'https://foustbrothersllc.github.io/callist/manifest.json',
   'https://foustbrothersllc.github.io/callist/apple-touch-icon.png',
   'https://foustbrothersllc.github.io/callist/favicon.ico',
 ];
