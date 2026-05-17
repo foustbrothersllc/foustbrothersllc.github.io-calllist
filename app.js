@@ -199,7 +199,7 @@ async function sha256(str) {
           challenge,
           rp: { name: 'Driver Call List' },
           user: { id: userId, name: 'driver-user', displayName: 'Driver User' },
-          pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+          pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
           authenticatorSelection: {
             authenticatorAttachment: 'platform',
             userVerification: 'required'
@@ -919,6 +919,7 @@ function initApp() {
     const encrypted = await encryptDriver(driver);
     const { error } = await supabase.from('drivers').upsert({ id, data: encrypted });
     if (error) throw new Error(error.message);
+    await cachePut({ id, data: encrypted }); // keep local cache in sync
     addWrites(1);
   }
 
@@ -1804,9 +1805,61 @@ function initApp() {
     }, { passive: true });
   })();
 
-  // ── Real-time listener via onSnapshot ───────────────────────
-  // Fires immediately from IndexedDB cache, then again when server responds.
-  // Handles offline gracefully — cached data renders without network.
+  // ── IndexedDB cache ─────────────────────────────────────────
+  // Stores encrypted rows locally so the app loads instantly offline.
+  const IDB_NAME    = 'dcl_cache';
+  const IDB_STORE   = 'drivers';
+  const IDB_VERSION = 1;
+
+  function openCache() {
+    return new Promise(function(resolve, reject) {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = function(e) {
+        e.target.result.createObjectStore(IDB_STORE, { keyPath: 'id' });
+      };
+      req.onsuccess = function(e) { resolve(e.target.result); };
+      req.onerror   = function(e) { reject(e.target.error); };
+    });
+  }
+
+  async function cacheGetAll() {
+    try {
+      const db = await openCache();
+      return new Promise(function(resolve, reject) {
+        const tx  = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).getAll();
+        req.onsuccess = function() { resolve(req.result || []); };
+        req.onerror   = function() { resolve([]); };
+      });
+    } catch(_) { return []; }
+  }
+
+  async function cachePutAll(rows) {
+    try {
+      const db = await openCache();
+      const tx  = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      rows.forEach(function(row) { store.put(row); });
+    } catch(_) {}
+  }
+
+  async function cachePut(row) {
+    try {
+      const db = await openCache();
+      const tx  = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(row);
+    } catch(_) {}
+  }
+
+  async function cacheDelete(id) {
+    try {
+      const db = await openCache();
+      const tx  = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+    } catch(_) {}
+  }
+
+  // ── Real-time listener + offline cache ───────────────────────
   let firstSnapshot = true;
   let snapshotUnsubscribe = null;
 
@@ -1820,13 +1873,29 @@ function initApp() {
   }
 
   function attachSnapshot() {
-    // ── Initial load ─────────────────────────────────────────
+    // ── Step 1: show cache instantly ────────────────────────────
+    cacheGetAll().then(async function(rows) {
+      if (rows.length === 0) return; // nothing cached yet — wait for network
+      removeLoadingMsg();
+      const drivers = await Promise.all(
+        rows.map(function(row) { return decryptDriver(row.data); })
+      );
+      drivers.sort(function(a, b) {
+        const ka = (a.lastName + a.firstName).toLowerCase();
+        const kb = (b.lastName + b.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      renderCards(drivers);
+      firstSnapshot = false; // cache rendered — real-time can now apply deltas
+    });
+
+    // ── Step 2: fetch from Supabase in background ────────────────
     supabase.from('drivers').select('id, data')
       .then(async function({ data, error }) {
-        removeLoadingMsg();
         if (error) {
+          // Network failed — cache already showing, just show offline banner
           showOfflineBanner();
-          console.error('Supabase fetch error:', error);
+          removeLoadingMsg();
           if (allCards.length === 0) {
             const p = document.createElement('div');
             p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
@@ -1836,8 +1905,11 @@ function initApp() {
           }
           return;
         }
-        firstSnapshot = false;
+        // Save fresh data to cache
+        await cachePutAll(data || []);
         if (navigator.onLine) hideOfflineBanner();
+        removeLoadingMsg();
+        // Full re-render with latest server data
         const drivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
@@ -1846,25 +1918,27 @@ function initApp() {
           const kb = (b.lastName + b.firstName).toLowerCase();
           return ka < kb ? -1 : ka > kb ? 1 : 0;
         });
+        firstSnapshot = false;
         renderCards(drivers);
       });
 
-    // ── Real-time listener ───────────────────────────────────
+    // ── Step 3: real-time updates ────────────────────────────────
     const channel = supabase.channel('drivers-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' },
         async function(payload) {
-          if (firstSnapshot) return; // wait for initial load to finish
+          if (firstSnapshot) return; // wait for initial render to finish
           if (payload.eventType === 'DELETE') {
-            const raw = payload.old;
-            const key = raw.id;
+            const key = payload.old.id;
             const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
             driverSet.delete(key);
             driverMap.delete(key);
             if (outer) animateRemove(outer);
             allCards = allCards.filter(c => c !== outer);
+            await cacheDelete(key);
             applyFilter();
           } else {
-            // INSERT or UPDATE
+            // INSERT or UPDATE — update cache and UI
+            await cachePut(payload.new);
             const driver = await decryptDriver(payload.new.data);
             upsertDriver(driver);
             applyFilter();
@@ -1873,7 +1947,6 @@ function initApp() {
       )
       .subscribe();
 
-    // Return unsubscribe function
     return function() { supabase.removeChannel(channel); };
   }
 
