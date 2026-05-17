@@ -178,6 +178,27 @@ body {
   color: rgba(255,150,150,0.85);
 }
 
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-wrap #searchBox { width: 100%; padding-right: 36px; }
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 50%;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.search-clear-btn:active { color: var(--gold); }
+
 #searchBox {
   width: 100%;
   padding: 10px 14px;
