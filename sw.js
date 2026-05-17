@@ -1,16 +1,10 @@
 /* ============================================================
    Driver Call List — sw.js
    ============================================================ */
-
-// Cache version is stamped at deploy time — no manual bumping needed.
-// The build date + a short hash of the app shell list acts as the version.
 const CACHE_VERSION = 'v' + (function() {
-  // Simple deterministic version: date of last deploy embedded as a constant.
-  // Replace this value each deploy (or use a CI step to inject it).
-  return '20250517-01';
+  return '20250517-02';
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
-
 const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/',
   'https://foustbrothersllc.github.io/callist/index.html',
@@ -23,7 +17,13 @@ const APP_SHELL = [
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(APP_SHELL);
+      return Promise.allSettled(
+        APP_SHELL.map(function(url) {
+          return cache.add(url).catch(function(err) {
+            console.warn('SW: could not cache', url, err);
+          });
+        })
+      );
     }).then(function() {
       return self.skipWaiting();
     })
@@ -46,20 +46,15 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Firebase
-  if (url.includes('firestore.googleapis.com') ||
-      url.includes('firebase') ||
-      url.includes('google.com/identitytoolkit') ||
-      url.includes('securetoken.google.com')) {
+  // Never intercept Supabase, esm.sh, or CDN requests
+  if (url.includes('supabase.co') ||
+      url.includes('esm.sh') ||
+      url.includes('cdnjs.cloudflare.com') ||
+      url.includes('gstatic.com')) {
     return;
   }
 
-  // Never intercept CDN requests
-  if (url.includes('cdnjs.cloudflare.com') || url.includes('gstatic.com')) {
-    return;
-  }
-
-  // Navigation requests — let network handle, fall back to cached index
+  // Navigation requests — network first, fall back to cached index
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(function() {
