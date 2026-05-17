@@ -440,6 +440,10 @@ function initApp() {
   const deleteModal     = document.getElementById('deleteModal');
   const deleteCancel    = document.getElementById('deleteCancel');
   const deleteConfirm   = document.getElementById('deleteConfirm');
+  const retireConfirmModal  = document.getElementById('retireConfirmModal');
+  const retireConfirmBody   = document.getElementById('retireConfirmBody');
+  const retireConfirmCancel = document.getElementById('retireConfirmCancel');
+  const retireConfirmOk     = document.getElementById('retireConfirmOk');
   const deleteBody      = document.getElementById('deleteModalBody');
   const importModal     = document.getElementById('importModal');
   const importCancel    = document.getElementById('importCancel');
@@ -1073,6 +1077,36 @@ function initApp() {
     panelNote.textContent = '';
     showPanel();
   }
+  // ── Retire from edit panel ───────────────────────────────────
+  function showRetireConfirm(driver, key, onConfirm, onCancel) {
+    retireConfirmBody.textContent =
+      'Mark ' + driver.firstName + ' ' + driver.lastName + ' as retired? ' +
+      'They will be hidden from the active list but kept in the retired records.';
+    retireConfirmModal.classList.add('open');
+
+    function cleanup() {
+      retireConfirmOk.removeEventListener('click', handleOk);
+      retireConfirmCancel.removeEventListener('click', handleCancel);
+      retireConfirmModal.removeEventListener('click', handleBackdrop);
+    }
+    function handleOk() {
+      retireConfirmModal.classList.remove('open');
+      cleanup();
+      onConfirm();
+    }
+    function handleCancel() {
+      retireConfirmModal.classList.remove('open');
+      cleanup();
+      onCancel();
+    }
+    function handleBackdrop(e) {
+      if (e.target === retireConfirmModal) handleCancel();
+    }
+    retireConfirmOk.addEventListener('click', handleOk);
+    retireConfirmCancel.addEventListener('click', handleCancel);
+    retireConfirmModal.addEventListener('click', handleBackdrop);
+  }
+
   function openEditPanel(key) {
     const driver = driverMap.get(key);
     if (!driver) return;
@@ -1085,6 +1119,52 @@ function initApp() {
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
+
+    // Watch for Retired selection in the dropdown
+    function onLocationChange() {
+      if (inputLocation.value === 'Retired') {
+        showRetireConfirm(
+          driver, key,
+          function onConfirm() {
+            // Commit retirement
+            const retiredDriver = {
+              ...driver,
+              retired: true,
+              retiredAt: new Date().toISOString(),
+            };
+            encryptDriver(retiredDriver).then(function(encrypted) {
+              supabase.from('drivers').upsert({ id: keyToDocId(key), data: encrypted })
+                .then(function({ error }) { if (error) console.error(error); });
+            });
+            // Remove from active UI
+            driverSet.delete(key);
+            driverMap.delete(key);
+            const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+            if (outer) animateRemove(outer);
+            allCards = allCards.filter(c => c !== outer);
+            cacheDelete(keyToDocId(key));
+            applyFilter();
+            closePanel();
+            inputLocation.removeEventListener('change', onLocationChange);
+          },
+          function onCancel() {
+            // Revert dropdown back to their actual location
+            inputLocation.value = driver.location || 'Greensboro';
+          }
+        );
+      }
+    }
+
+    inputLocation.addEventListener('change', onLocationChange);
+    // Remove listener when panel closes so it doesn't fire on next open
+    const origClose = closePanel;
+    function closeWithCleanup() {
+      inputLocation.removeEventListener('change', onLocationChange);
+      origClose();
+    }
+    panelCloseBtn.onclick = closeWithCleanup;
+    panelOverlay.onclick  = closeWithCleanup;
+
     showPanel();
   }
   function showPanel() {
@@ -1828,29 +1908,14 @@ function initApp() {
     }
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      // Parse Excel directly — no AI needed.
-      // Columns: Last Name, First Name, Cell Phone, Secondary/Emergency
-      // Prefers 'Sheet1' (main driver list) over other sheets.
-      const buffer    = await file.arrayBuffer();
-      const wb        = XLSX.read(buffer, { type: 'array' });
+      // Convert Excel to CSV text using SheetJS
+      const buffer = await file.arrayBuffer();
+      const wb     = XLSX.read(buffer, { type: 'array' });
+      // Prefer 'Sheet1' if it exists, otherwise use the first sheet
       const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
-      const ws        = wb.Sheets[sheetName];
-      const rows      = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
-      const SKIP_WORDS = /last\s*name|first\s*name|employee|name/i;
-      const drivers = [];
-      rows.forEach(function(row) {
-        const last  = String(row[0] || '').trim();
-        const first = String(row[1] || '').trim();
-        const phone = String(row[2] || '').trim();
-        const alt   = String(row[3] || '').trim();
-        if (!last || !first) return;
-        if (SKIP_WORDS.test(last) || SKIP_WORDS.test(first)) return;
-        function cleanNum(s) { return s.replace(/\s*(E|C|2nd|1st|call\s*1st|emergency|cell).*/i, '').trim(); }
-        drivers.push({ lastName: last, firstName: first, rawPhone: cleanNum(phone), rawAlt: cleanNum(alt) });
-      });
-
-      return { fileType: 'xlsx', drivers };
+      const ws     = wb.Sheets[sheetName];
+      const csv    = XLSX.utils.sheet_to_csv(ws);
+      return { fileContent: csv };
     }
 
     if (name.endsWith('.json')) {
@@ -1877,37 +1942,46 @@ function initApp() {
     try {
       const prepared = await prepareFileForAI(file);
 
-      function makePhone(raw) {
-        if (!raw) return null;
-        const digits = normalisePhone(raw);
-        return digits ? { digits, display: formatPhone(digits) } : null;
-      }
-
       if (prepared.fileType === 'json') {
-        // Legacy JSON path
+        // Legacy path — no AI needed
         newDrivers = prepared.drivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
         setProgress(35, 'JSON parsed…');
+      } else {
+        // ── Send to Supabase Edge Function → Gemini ──────────
+        importStatus.textContent = '🤖 AI is reading your file…';
+        setProgress(20, 'Sending to AI…');
 
-      } else if (prepared.fileType === 'xlsx') {
-        // Direct Excel parse — no AI, instant
-        setProgress(30, 'Parsed ' + prepared.drivers.length + ' rows…');
-        importStatus.textContent = 'Parsed ' + prepared.drivers.length + ' drivers from Excel…';
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
+          body: { fileContent: prepared.fileContent },
+          headers: { Authorization: 'Bearer ' + SUPABASE_KEY },
+        });
 
-        newDrivers = prepared.drivers.map(function(d) {
+        if (fnError) throw new Error('AI processing failed: ' + fnError.message);
+        if (fnData.error) throw new Error('AI error: ' + fnData.error);
+        if (!fnData.drivers || fnData.drivers.length === 0) {
+          throw new Error('AI found no driver records in the file. Check the file has driver data.');
+        }
+
+        setProgress(35, 'AI found ' + fnData.drivers.length + ' drivers…');
+        importStatus.textContent = '✅ AI found ' + fnData.drivers.length + ' drivers — reviewing…';
+
+        // Normalise location values and phone objects
+        newDrivers = fnData.drivers.map(function(d) {
+          function cleanPhone(p) {
+            if (!p || !p.digits) return null;
+            const digits = normalisePhone(p.digits);
+            return digits ? { digits, display: formatPhone(digits) } : null;
+          }
           return {
-            lastName:  d.lastName,
-            firstName: d.firstName,
-            location:  'Greensboro', // default; Excel sheet doesn't include location column
-            phone:     makePhone(d.rawPhone),
-            altPhone:  makePhone(d.rawAlt),
+            lastName:  (d.lastName  || '').trim(),
+            firstName: (d.firstName || '').trim(),
+            location:  normaliseSlic(d.location || 'Greensboro'),
+            phone:     cleanPhone(d.phone),
+            altPhone:  cleanPhone(d.altPhone),
           };
         }).filter(function(d) { return d.lastName && d.firstName; });
 
-        if (newDrivers.length === 0) throw new Error('No valid driver records found in the Excel file.');
-        setProgress(35, 'Found ' + newDrivers.length + ' drivers…');
-
-      } else {
-        throw new Error('Unsupported file type. Please use Excel (.xlsx) or JSON.');
+        if (newDrivers.length === 0) throw new Error('No valid driver records after processing.');
       }
     } catch(e) {
       importStatus.textContent = '❌ ' + e.message;
