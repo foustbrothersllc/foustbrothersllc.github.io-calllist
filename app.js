@@ -900,8 +900,8 @@ function initApp() {
     }
   }
 
-  // ── Upsert locally + save to Firestore ───────────────────────
-  async function upsertDriver(driver) {
+  // ── Update local UI only (called from snapshot handler — no Firestore write) ──
+  function upsertDriver(driver) {
     const key   = driverKey(driver.lastName, driver.firstName);
     const isNew = !driverSet.has(key);
     registerDriver(driver);
@@ -931,11 +931,16 @@ function initApp() {
         listEl.insertBefore(newOuter, noResults);
       }
     }
+    // NOTE: no Firestore write here — snapshot handler calls this after
+    // already receiving data from Firestore. Writing back would cause a loop.
+  }
 
+  // ── Encrypt + write driver to Firestore (called only from saveDriver) ──
+  async function saveDriverToFirestore(driver) {
+    const key = driverKey(driver.lastName, driver.firstName);
     const encrypted = await encryptDriver(driver);
     await setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted); // throws on failure — caught by saveDriver
     addWrites(1);
-    applyFilter();
   }
 
   // ── Filter / search ──────────────────────────────────────────
@@ -1031,7 +1036,8 @@ function initApp() {
     try {
       btnSave.disabled = true;
       btnSave.textContent = 'Saving…';
-      await upsertDriver(driver);
+      upsertDriver(driver);           // update UI immediately
+      await saveDriverToFirestore(driver); // then persist to Firestore
       panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
       setTimeout(closePanel, 600);
     } catch (err) {
