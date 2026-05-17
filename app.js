@@ -440,10 +440,6 @@ function initApp() {
   const deleteModal     = document.getElementById('deleteModal');
   const deleteCancel    = document.getElementById('deleteCancel');
   const deleteConfirm   = document.getElementById('deleteConfirm');
-  const retireConfirmModal  = document.getElementById('retireConfirmModal');
-  const retireConfirmBody   = document.getElementById('retireConfirmBody');
-  const retireConfirmCancel = document.getElementById('retireConfirmCancel');
-  const retireConfirmOk     = document.getElementById('retireConfirmOk');
   const deleteBody      = document.getElementById('deleteModalBody');
   const importModal     = document.getElementById('importModal');
   const importCancel    = document.getElementById('importCancel');
@@ -1077,36 +1073,6 @@ function initApp() {
     panelNote.textContent = '';
     showPanel();
   }
-  // ── Retire from edit panel ───────────────────────────────────
-  function showRetireConfirm(driver, key, onConfirm, onCancel) {
-    retireConfirmBody.textContent =
-      'Mark ' + driver.firstName + ' ' + driver.lastName + ' as retired? ' +
-      'They will be hidden from the active list but kept in the retired records.';
-    retireConfirmModal.classList.add('open');
-
-    function cleanup() {
-      retireConfirmOk.removeEventListener('click', handleOk);
-      retireConfirmCancel.removeEventListener('click', handleCancel);
-      retireConfirmModal.removeEventListener('click', handleBackdrop);
-    }
-    function handleOk() {
-      retireConfirmModal.classList.remove('open');
-      cleanup();
-      onConfirm();
-    }
-    function handleCancel() {
-      retireConfirmModal.classList.remove('open');
-      cleanup();
-      onCancel();
-    }
-    function handleBackdrop(e) {
-      if (e.target === retireConfirmModal) handleCancel();
-    }
-    retireConfirmOk.addEventListener('click', handleOk);
-    retireConfirmCancel.addEventListener('click', handleCancel);
-    retireConfirmModal.addEventListener('click', handleBackdrop);
-  }
-
   function openEditPanel(key) {
     const driver = driverMap.get(key);
     if (!driver) return;
@@ -1119,52 +1085,6 @@ function initApp() {
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
-
-    // Watch for Retired selection in the dropdown
-    function onLocationChange() {
-      if (inputLocation.value === 'Retired') {
-        showRetireConfirm(
-          driver, key,
-          function onConfirm() {
-            // Commit retirement
-            const retiredDriver = {
-              ...driver,
-              retired: true,
-              retiredAt: new Date().toISOString(),
-            };
-            encryptDriver(retiredDriver).then(function(encrypted) {
-              supabase.from('drivers').upsert({ id: keyToDocId(key), data: encrypted })
-                .then(function({ error }) { if (error) console.error(error); });
-            });
-            // Remove from active UI
-            driverSet.delete(key);
-            driverMap.delete(key);
-            const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
-            if (outer) animateRemove(outer);
-            allCards = allCards.filter(c => c !== outer);
-            cacheDelete(keyToDocId(key));
-            applyFilter();
-            closePanel();
-            inputLocation.removeEventListener('change', onLocationChange);
-          },
-          function onCancel() {
-            // Revert dropdown back to their actual location
-            inputLocation.value = driver.location || 'Greensboro';
-          }
-        );
-      }
-    }
-
-    inputLocation.addEventListener('change', onLocationChange);
-    // Remove listener when panel closes so it doesn't fire on next open
-    const origClose = closePanel;
-    function closeWithCleanup() {
-      inputLocation.removeEventListener('change', onLocationChange);
-      origClose();
-    }
-    panelCloseBtn.onclick = closeWithCleanup;
-    panelOverlay.onclick  = closeWithCleanup;
-
     showPanel();
   }
   function showPanel() {
@@ -1572,136 +1492,162 @@ function initApp() {
   function openDupModal() {
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
+    dupDeleteAll.style.display = 'none';
 
-    // ── Section 1: Duplicate phone numbers ────────────────────
-    const phoneMap = new Map(); // digits → [key, ...]
+    function addDivider() {
+      const d = document.createElement('div');
+      d.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+      dupResults.appendChild(d);
+    }
+
+    // ── Section 1: Same number in both primary AND alt (single driver) ──
+    const sameBothDrivers = [];
     driverMap.forEach(function(d, key) {
-      if (d.phone && d.phone.digits) {
-        const arr = phoneMap.get(d.phone.digits) || [];
-        arr.push(key);
-        phoneMap.set(d.phone.digits, arr);
-      }
-      if (d.altPhone && d.altPhone.digits) {
-        const arr = phoneMap.get(d.altPhone.digits) || [];
-        arr.push(key);
-        phoneMap.set(d.altPhone.digits, arr);
+      if (d.phone && d.altPhone &&
+          d.phone.digits && d.altPhone.digits &&
+          d.phone.digits === d.altPhone.digits) {
+        sameBothDrivers.push({ key, d });
       }
     });
 
-    const dupPhones = [];
-    phoneMap.forEach(function(keys, digits) {
-      if (keys.length > 1) dupPhones.push({ digits, keys });
-    });
+    const sec1 = document.createElement('p');
+    sec1.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
+    sec1.textContent = '🔁 Same Primary & Alt Number (' + sameBothDrivers.length + ')';
+    dupResults.appendChild(sec1);
 
-    if (dupPhones.length > 0) {
-      const secHeader = document.createElement('p');
-      secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
-      secHeader.textContent = '⚠️ Duplicate Phone Numbers (' + dupPhones.length + ')';
-      dupResults.appendChild(secHeader);
-
-      dupPhones.forEach(function(item) {
+    if (sameBothDrivers.length === 0) {
+      const ok = document.createElement('p');
+      ok.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
+      ok.textContent = '✅ No contacts with duplicate primary/alt numbers.';
+      dupResults.appendChild(ok);
+    } else {
+      sameBothDrivers.forEach(function(item) {
+        const d   = item.d;
+        const key = item.key;
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'background:rgba(255,181,0,0.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;';
+        wrap.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-size:13px;font-weight:700;color:#ffffff;';
+        nameEl.textContent = d.lastName + ', ' + d.firstName;
         const numEl = document.createElement('div');
-        numEl.style.cssText = 'font-size:12px;font-weight:700;color:#FFB500;margin-bottom:4px;';
-        numEl.textContent = formatPhone(item.digits);
-        wrap.appendChild(numEl);
-        item.keys.forEach(function(key) {
-          const d = driverMap.get(key);
-          if (!d) return;
-          const nameEl = document.createElement('div');
-          nameEl.style.cssText = 'font-size:12px;color:#ffffff;padding-left:6px;';
-          nameEl.textContent = '• ' + d.lastName + ', ' + d.firstName + ' (' + (d.location || '') + ')';
-          wrap.appendChild(nameEl);
+        numEl.style.cssText = 'font-size:11px;color:#FFB500;margin-top:2px;';
+        numEl.textContent = formatPhone(d.phone.digits) + ' (both fields)';
+        info.appendChild(nameEl);
+        info.appendChild(numEl);
+
+        const mergeBtn = document.createElement('button');
+        mergeBtn.textContent = '⬆ Merge to Primary';
+        mergeBtn.style.cssText = 'padding:6px 10px;border-radius:8px;border:1.5px solid #FFB500;background:rgba(255,181,0,0.15);color:#FFB500;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;';
+        mergeBtn.addEventListener('click', async function() {
+          mergeBtn.disabled = true;
+          mergeBtn.textContent = '…';
+          const updated = { ...d, altPhone: null, updatedAt: new Date().toLocaleString() };
+          try {
+            await saveDriverToFirestore(updated);
+            driverMap.set(key, updated);
+            upsertDriver(updated);
+            applyFilter();
+            wrap.remove();
+            // Update section header count
+            const remaining = dupResults.querySelectorAll('[data-merge-row]').length;
+            sec1.textContent = '🔁 Same Primary & Alt Number (' + remaining + ')';
+            if (remaining === 0) {
+              const ok2 = document.createElement('p');
+              ok2.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
+              ok2.textContent = '✅ No contacts with duplicate primary/alt numbers.';
+              sec1.after(ok2);
+            }
+          } catch(e) {
+            mergeBtn.disabled = false;
+            mergeBtn.textContent = '⬆ Merge to Primary';
+            alert('Failed to save: ' + e.message);
+          }
         });
+
+        wrap.dataset.mergeRow = '1';
+        wrap.appendChild(info);
+        wrap.appendChild(mergeBtn);
         dupResults.appendChild(wrap);
       });
-
-      const divider = document.createElement('div');
-      divider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
-      dupResults.appendChild(divider);
     }
 
-    // ── Section 2: Possibly retired (not on last import) ──────
+    addDivider();
+
+    // ── Section 2: Not on last import (possibly moved/retired) ───
     const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
+    const sec2 = document.createElement('p');
+    sec2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
+
     if (!meta) {
-      const noImport = document.createElement('p');
-      noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
-      noImport.textContent = 'Run an import to see possibly retired drivers.';
-      dupResults.appendChild(noImport);
-      if (dupPhones.length === 0) dupDeleteAll.style.display = 'none';
-      else dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
-      dupModal.classList.add('open');
-      return;
-    }
-
-    const importedIds = new Set(meta.grencIds || []);
-    const possibly = [];
-    driverMap.forEach(function(d, key) {
-      if ((d.location || '').toLowerCase() !== 'greensboro') return;
-      const docId = keyToDocId(key);
-      if (!importedIds.has(docId)) possibly.push({ key, d });
-    });
-
-    const secHeader2 = document.createElement('p');
-    secHeader2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
-    secHeader2.textContent = 'Possibly Retired – GRENC (' + possibly.length + ')';
-    dupResults.appendChild(secHeader2);
-
-    if (possibly.length === 0) {
-      const okEl = document.createElement('p');
-      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
-      okEl.textContent = '✅ All GRENC drivers were on the last import.';
-      dupResults.appendChild(okEl);
-      dupDeleteAll.style.display = 'none';
+      sec2.textContent = '📋 Not on Last Import (run an import first)';
+      dupResults.appendChild(sec2);
     } else {
-      dupDeleteAll.style.display = 'block';
+      const importedIds = new Set(meta.grencIds || []);
+      const possibly = [];
+      driverMap.forEach(function(d, key) {
+        if ((d.location || '').toLowerCase() !== 'greensboro') return;
+        if (!importedIds.has(keyToDocId(key))) possibly.push({ key, d });
+      });
+
+      sec2.textContent = '📋 Not on Last Import – GRENC (' + possibly.length + ')';
+      dupResults.appendChild(sec2);
+
       const impHeader = document.createElement('p');
       impHeader.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:8px;';
       impHeader.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
       dupResults.appendChild(impHeader);
 
-      possibly.forEach(function(item) {
-        const d = item.d;
-        const key = item.key;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.accentColor = '#b91c1c';
-        cb.addEventListener('change', function() {
-          if (cb.checked) window.__retiredKeysToDelete.push(key);
-          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+      if (possibly.length === 0) {
+        const ok = document.createElement('p');
+        ok.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
+        ok.textContent = '✅ All GRENC drivers were on the last import.';
+        dupResults.appendChild(ok);
+      } else {
+        dupDeleteAll.style.display = 'block';
+        possibly.forEach(function(item) {
+          const d   = item.d;
+          const key = item.key;
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.style.accentColor = '#ca8a04';
+          cb.addEventListener('change', function() {
+            if (cb.checked) window.__retiredKeysToDelete.push(key);
+            else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+            dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+          });
+          const label = document.createElement('span');
+          label.style.cssText = 'font-size:13px;color:#ffffff;';
+          label.textContent = d.lastName + ', ' + d.firstName + ' — ' + (d.phone ? formatPhone(d.phone.digits) : 'no phone');
+          row.appendChild(cb);
+          row.appendChild(label);
+          dupResults.appendChild(row);
         });
-        const label = document.createElement('span');
-        const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
-        label.style.cssText = 'font-size:13px;color:#ffffff;';
-        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
-        row.appendChild(cb);
-        row.appendChild(label);
-        dupResults.appendChild(row);
-      });
+      }
     }
+
+    addDivider();
+
     // ── Section 3: No phone number on file ───────────────────────
     const noPhone = [];
     driverMap.forEach(function(d, key) {
       if (!d.phone && !d.altPhone) noPhone.push({ key, d });
     });
 
-    const divider2 = document.createElement('div');
-    divider2.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
-    dupResults.appendChild(divider2);
-
-    const secHeader3 = document.createElement('p');
-    secHeader3.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
-    secHeader3.textContent = '📵 No Phone Number (' + noPhone.length + ')';
-    dupResults.appendChild(secHeader3);
+    const sec3 = document.createElement('p');
+    sec3.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
+    sec3.textContent = '📵 No Phone on File (' + noPhone.length + ')';
+    dupResults.appendChild(sec3);
 
     if (noPhone.length === 0) {
-      const okEl2 = document.createElement('p');
-      okEl2.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
-      okEl2.textContent = '✅ All drivers have at least one phone number.';
-      dupResults.appendChild(okEl2);
+      const ok2 = document.createElement('p');
+      ok2.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
+      ok2.textContent = '✅ All drivers have at least one phone number.';
+      dupResults.appendChild(ok2);
     } else {
       noPhone.sort(function(a, b) {
         const ka = (a.d.lastName + a.d.firstName).toLowerCase();
@@ -1709,7 +1655,7 @@ function initApp() {
         return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
       noPhone.forEach(function(item) {
-        const d = item.d;
+        const d   = item.d;
         const key = item.key;
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
