@@ -2,7 +2,7 @@
    Driver Call List — sw.js
    ============================================================ */
 const CACHE_VERSION = 'v' + (function() {
-  return '20250517-03';
+  return '20250517-04';
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
 const APP_SHELL = [
@@ -54,12 +54,24 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Navigation requests — network first, fall back to cached index
+  // Navigation requests — cache first (instant offline), then network
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(function() {
-        return caches.match('https://foustbrothersllc.github.io/callist/index.html');
-      })
+      caches.match('https://foustbrothersllc.github.io/callist/index.html')
+        .then(function(cached) {
+          // Kick off a background network fetch to keep the cache fresh
+          const networkFetch = fetch(event.request).then(function(response) {
+            if (response && response.status === 200) {
+              caches.open(CACHE_NAME).then(function(cache) {
+                cache.put(event.request, response.clone());
+              });
+            }
+            return response;
+          }).catch(function() { /* offline — cache already returned */ });
+
+          // Return cache immediately if we have it; otherwise wait for network
+          return cached || networkFetch;
+        })
     );
     return;
   }
