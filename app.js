@@ -1828,14 +1828,34 @@ function initApp() {
     }
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      // Convert Excel to CSV text using SheetJS
-      const buffer = await file.arrayBuffer();
-      const wb     = XLSX.read(buffer, { type: 'array' });
-      // Prefer 'Sheet1' if it exists, otherwise use the first sheet
+      // Parse Excel directly in the browser — no AI needed.
+      // Expected columns: Last Name, First Name, Cell Phone, Secondary/Emergency
+      // Prefers 'Sheet1' (the main driver list) over other sheets.
+      const buffer    = await file.arrayBuffer();
+      const wb        = XLSX.read(buffer, { type: 'array' });
       const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
-      const ws     = wb.Sheets[sheetName];
-      const csv    = XLSX.utils.sheet_to_csv(ws);
-      return { fileContent: csv };
+      const ws        = wb.Sheets[sheetName];
+      const rows      = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // Find header row — first row where col[0] looks like a name (not blank, not a heading label)
+      // Rows are: [Last, First, CellPhone, AltPhone]
+      // Skip any true header rows (e.g. "Last Name", "First Name")
+      const SKIP_WORDS = /last\s*name|first\s*name|employee|name/i;
+      const drivers = [];
+      rows.forEach(function(row) {
+        const last  = String(row[0] || '').trim();
+        const first = String(row[1] || '').trim();
+        const phone = String(row[2] || '').trim();
+        const alt   = String(row[3] || '').trim();
+        // Skip blank rows and header rows
+        if (!last || !first) return;
+        if (SKIP_WORDS.test(last) || SKIP_WORDS.test(first)) return;
+        // Strip trailing annotations like " E", " C", " 2nd", "Call 1st"
+        function cleanNum(s) { return s.replace(/\s*(E|C|2nd|1st|call\s*1st|emergency|cell).*/i, '').trim(); }
+        drivers.push({ lastName: last, firstName: first, rawPhone: cleanNum(phone), rawAlt: cleanNum(alt) });
+      });
+
+      return { fileType: 'xlsx', drivers };
     }
 
     if (name.endsWith('.json')) {
@@ -1862,13 +1882,38 @@ function initApp() {
     try {
       const prepared = await prepareFileForAI(file);
 
+      function makePhone(raw) {
+        if (!raw) return null;
+        const digits = normalisePhone(raw);
+        return digits ? { digits, display: formatPhone(digits) } : null;
+      }
+
       if (prepared.fileType === 'json') {
-        // Legacy path — no AI needed
+        // Legacy JSON path
         newDrivers = prepared.drivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
         setProgress(35, 'JSON parsed…');
+
+      } else if (prepared.fileType === 'xlsx') {
+        // Direct Excel parse — no AI needed, instant
+        setProgress(30, 'Parsed ' + prepared.drivers.length + ' rows…');
+        importStatus.textContent = 'Parsed ' + prepared.drivers.length + ' drivers from Excel…';
+
+        newDrivers = prepared.drivers.map(function(d) {
+          return {
+            lastName:  d.lastName,
+            firstName: d.firstName,
+            location:  'Greensboro', // default; Excel sheet doesn't include location
+            phone:     makePhone(d.rawPhone),
+            altPhone:  makePhone(d.rawAlt),
+          };
+        }).filter(function(d) { return d.lastName && d.firstName; });
+
+        if (newDrivers.length === 0) throw new Error('No valid driver records found in the Excel file.');
+        setProgress(35, 'Found ' + newDrivers.length + ' drivers…');
+
       } else {
-        // ── Send to Supabase Edge Function → Gemini ──────────
-        importStatus.textContent = '🤖 AI is reading your file…';
+        // PDF path — still uses Supabase Edge Function
+        importStatus.textContent = '🤖 AI is reading your PDF…';
         setProgress(20, 'Sending to AI…');
 
         const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
@@ -1879,29 +1924,23 @@ function initApp() {
         if (fnError) throw new Error('AI processing failed: ' + fnError.message);
         if (fnData.error) throw new Error('AI error: ' + fnData.error);
         if (!fnData.drivers || fnData.drivers.length === 0) {
-          throw new Error('AI found no driver records in the file. Check the file has driver data.');
+          throw new Error('AI found no driver records in the PDF.');
         }
 
         setProgress(35, 'AI found ' + fnData.drivers.length + ' drivers…');
         importStatus.textContent = '✅ AI found ' + fnData.drivers.length + ' drivers — reviewing…';
 
-        // Normalise location values and phone objects
         newDrivers = fnData.drivers.map(function(d) {
-          function cleanPhone(p) {
-            if (!p || !p.digits) return null;
-            const digits = normalisePhone(p.digits);
-            return digits ? { digits, display: formatPhone(digits) } : null;
-          }
           return {
             lastName:  (d.lastName  || '').trim(),
             firstName: (d.firstName || '').trim(),
             location:  normaliseSlic(d.location || 'Greensboro'),
-            phone:     cleanPhone(d.phone),
-            altPhone:  cleanPhone(d.altPhone),
+            phone:     makePhone(d.phone && d.phone.digits ? d.phone.digits : d.phone),
+            altPhone:  makePhone(d.altPhone && d.altPhone.digits ? d.altPhone.digits : d.altPhone),
           };
         }).filter(function(d) { return d.lastName && d.firstName; });
 
-        if (newDrivers.length === 0) throw new Error('No valid driver records after processing.');
+        if (newDrivers.length === 0) throw new Error('No valid driver records after AI processing.');
       }
     } catch(e) {
       importStatus.textContent = '❌ ' + e.message;
