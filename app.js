@@ -19,35 +19,12 @@
    - Mobile search zoom disabled (font-size:16px)
    ============================================================ */
 
-import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  getFirestore, collection, doc,
-  setDoc, deleteDoc, getDocs, onSnapshot,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ── Firebase config ──────────────────────────────────────────
-const firebaseConfig = {
-  apiKey:            "AIzaSyCVclqKPtCl-xu38NXY9mLNHClxRmnd1vE",
-  authDomain:        "driver-manger.firebaseapp.com",
-  projectId:         "driver-manger",
-  storageBucket:     "driver-manger.firebasestorage.app",
-  messagingSenderId: "734246658670",
-  appId:             "1:734246658670:web:26b646a6c0eb35ec2efc7f",
-  measurementId:     "G-JGYDLKDMC8"
-};
-
-const firebaseApp  = initializeApp(firebaseConfig);
-const auth         = getAuth(firebaseApp);
-// persistentLocalCache stores all Firestore docs on-device (IndexedDB).
-// getDocs() will serve cached data immediately when offline.
-const db           = initializeFirestore(firebaseApp, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
-const driversCol   = collection(db, 'drivers');
+// ── Supabase config ──────────────────────────────────────────
+const SUPABASE_URL  = 'https://lywhuzkgahhzhgjdgbnx.supabase.co';
+const SUPABASE_KEY  = 'sb_publishable_r_BCozqjBdfuFOP5wvnzgw_B8m7jMfJ';
+const supabase      = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── Access & Admin keys (hashed — plaintext never stored here) ──
 // Passwords are checked by hashing user input and comparing to these digests.
@@ -800,7 +777,7 @@ function initApp() {
         driverSet.delete(key);
         driverMap.delete(key);
         if (outer) animateRemove(outer);
-        deleteDoc(doc(db, 'drivers', keyToDocId(key))).catch(console.error);
+        supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
       });
       selectedKeys.clear();
       updateBulkBar();
@@ -848,7 +825,7 @@ function initApp() {
       driverSet.delete(key);
       driverMap.delete(key);
       if (outer) animateRemove(outer);
-      deleteDoc(doc(db, 'drivers', keyToDocId(key))).catch(console.error);
+      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
       applyFilter();
       deleteModal.classList.remove('open');
       cleanup();
@@ -938,8 +915,10 @@ function initApp() {
   // ── Encrypt + write driver to Firestore (called only from saveDriver) ──
   async function saveDriverToFirestore(driver) {
     const key = driverKey(driver.lastName, driver.firstName);
+    const id  = keyToDocId(key);
     const encrypted = await encryptDriver(driver);
-    await setDoc(doc(db, 'drivers', keyToDocId(key)), encrypted); // throws on failure — caught by saveDriver
+    const { error } = await supabase.from('drivers').upsert({ id, data: encrypted });
+    if (error) throw new Error(error.message);
     addWrites(1);
   }
 
@@ -1017,7 +996,7 @@ function initApp() {
       const oldOuter = listEl.querySelector('.card-outer[data-key="' + editingKey + '"]');
       driverSet.delete(editingKey);
       driverMap.delete(editingKey);
-      deleteDoc(doc(db, 'drivers', keyToDocId(editingKey))).catch(console.error);
+      supabase.from('drivers').delete().eq('id', keyToDocId(editingKey)).then(function({error}){ if(error) console.error(error); });
       if (oldOuter) {
         allCards = allCards.filter(c => c !== oldOuter);
         oldOuter.remove();
@@ -1400,7 +1379,7 @@ function initApp() {
       driverSet.delete(key);
       driverMap.delete(key);
       if (outer) animateRemove(outer);
-      deleteDoc(doc(db, 'drivers', keyToDocId(key))).catch(console.error);
+      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
     });
     applyFilter();
     dupModal.classList.remove('open');
@@ -1499,7 +1478,7 @@ function initApp() {
       for (let i = 0; i < encrypted.length; i += BATCH) {
         const batch = encrypted.slice(i, i + BATCH);
         await Promise.all(batch.map(function(e) {
-          return setDoc(doc(db, 'drivers', e.id), e.data);
+          return supabase.from('drivers').upsert({ id: e.id, data: e.data }).then(function({error}){ if(error) throw new Error(error.message); });
         }));
         done += batch.length;
         btn.textContent = '⏳ ' + done + '/' + total;
@@ -1568,11 +1547,10 @@ function initApp() {
       incomingMap.set(keyToDocId(key), d);
     });
 
-    let snapshot;
-    try {
-      snapshot = await getDocs(driversCol);
-    } catch(e) {
-      importStatus.textContent = '❌ Failed to read database: ' + e.message;
+    // Pre-flight check — confirm we can reach the database before uploading
+    const { error: dbCheckError } = await supabase.from('drivers').select('id').limit(1);
+    if (dbCheckError) {
+      importStatus.textContent = '❌ Failed to read database: ' + dbCheckError.message;
       importConfirm.disabled = false;
       importConfirm.textContent = 'Import';
       hideProgress();
@@ -1610,7 +1588,7 @@ function initApp() {
         const batch = entries.slice(i, i + 20);
         await Promise.all(batch.map(async function([id, driver]) {
           const encrypted = await encryptDriver(driver);
-          return setDoc(doc(db, 'drivers', id), encrypted);
+          return supabase.from('drivers').upsert({ id, data: encrypted }).then(function({error}){ if(error) throw new Error(error.message); });
         }));
         done += batch.length;
         const pct = 50 + Math.round((done / total) * 40);
@@ -1842,75 +1820,63 @@ function initApp() {
   }
 
   function attachSnapshot() {
-    const unsub = onSnapshot(driversCol,
-      async function(snapshot) {
+    // ── Initial load ─────────────────────────────────────────
+    supabase.from('drivers').select('id, data')
+      .then(async function({ data, error }) {
         removeLoadingMsg();
+        if (error) {
+          showOfflineBanner();
+          console.error('Supabase fetch error:', error);
+          if (allCards.length === 0) {
+            const p = document.createElement('div');
+            p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
+            p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
+              + '<p style="font-size:13px;color:#7a1a1a;margin:0;">No cached data available. Connect to the internet and pull down to refresh.</p>';
+            listEl.insertBefore(p, noResults);
+          }
+          return;
+        }
+        firstSnapshot = false;
         if (navigator.onLine) hideOfflineBanner();
-        else if (snapshot.metadata.fromCache) showOfflineBanner();
+        const drivers = await Promise.all(
+          (data || []).map(function(row) { return decryptDriver(row.data); })
+        );
+        drivers.sort(function(a, b) {
+          const ka = (a.lastName + a.firstName).toLowerCase();
+          const kb = (b.lastName + b.firstName).toLowerCase();
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        });
+        renderCards(drivers);
+      });
 
-        // Skip snapshots that are just the server echoing back our own local writes.
-        const isServerEcho = !firstSnapshot
-          && !snapshot.metadata.fromCache
-          && snapshot.docChanges().every(function(c) { return c.doc.metadata.hasPendingWrites; });
-        if (isServerEcho) return;
+    // ── Real-time listener ───────────────────────────────────
+    const channel = supabase.channel('drivers-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' },
+        async function(payload) {
+          if (firstSnapshot) return; // wait for initial load to finish
+          if (payload.eventType === 'DELETE') {
+            const raw = payload.old;
+            const key = raw.id;
+            const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+            driverSet.delete(key);
+            driverMap.delete(key);
+            if (outer) animateRemove(outer);
+            allCards = allCards.filter(c => c !== outer);
+            applyFilter();
+          } else {
+            // INSERT or UPDATE
+            const driver = await decryptDriver(payload.new.data);
+            upsertDriver(driver);
+            applyFilter();
+          }
+        }
+      )
+      .subscribe();
 
-        if (firstSnapshot) {
-          // First load: decrypt ALL drivers in parallel — much faster than sequential awaits.
-          firstSnapshot = false;
-          const drivers = await Promise.all(
-            snapshot.docs.map(function(d) { return decryptDriver(d.data()); })
-          );
-          drivers.sort(function(a, b) {
-            const ka = (a.lastName + a.firstName).toLowerCase();
-            const kb = (b.lastName + b.firstName).toLowerCase();
-            return ka < kb ? -1 : ka > kb ? 1 : 0;
-          });
-          renderCards(drivers);
-        } else {
-          // Incremental update: decrypt changed docs in parallel, then apply to UI once.
-          const changes = snapshot.docChanges();
-          const decrypted = await Promise.all(
-            changes.map(function(c) { return decryptDriver(c.doc.data()); })
-          );
-          changes.forEach(function(change, i) {
-            const driver = decrypted[i];
-            if (change.type === 'removed') {
-              const key = driverKey(driver.lastName, driver.firstName);
-              const outer = listEl.querySelector('.card-outer[data-key="' + keyToDocId(key) + '"]')
-                         || listEl.querySelector('.card-outer[data-key="' + key + '"]');
-              driverSet.delete(key);
-              driverMap.delete(key);
-              if (outer) animateRemove(outer);
-              allCards = allCards.filter(c => c !== outer);
-            } else {
-              upsertDriver(driver);
-            }
-          });
-          applyFilter();
-        }
-      },
-      function(err) {
-        // Snapshot error — show offline state; cached data still visible
-        removeLoadingMsg();
-        showOfflineBanner();
-        console.error('onSnapshot error:', err);
-        if (allCards.length === 0) {
-          const p = document.createElement('div');
-          p.style.cssText = 'margin:24px 16px;padding:16px;background:#fee2e2;border-radius:12px;border-left:4px solid #b91c1c;';
-          p.innerHTML = '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Could not reach the server</p>'
-            + '<p style="font-size:13px;color:#7a1a1a;margin:0;">No cached data available. Connect to the internet and pull down to refresh.</p>';
-          listEl.insertBefore(p, noResults);
-        }
-      }
-    );
-    return unsub;
+    // Return unsubscribe function
+    return function() { supabase.removeChannel(channel); };
   }
 
-  signInAnonymously(auth)
-    .then(function() { snapshotUnsubscribe = attachSnapshot(); })
-    .catch(function(err) {
-      // Auth failed — try snapshot anyway; persistent cache may serve data
-      console.warn('Anonymous auth failed, attempting snapshot anyway:', err);
-      snapshotUnsubscribe = attachSnapshot();
-    });
+  // Supabase needs no auth for anon access — just start the listener
+  snapshotUnsubscribe = attachSnapshot();
 }
