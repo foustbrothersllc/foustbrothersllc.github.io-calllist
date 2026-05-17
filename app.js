@@ -1871,6 +1871,7 @@ function initApp() {
 
         const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
           body: { fileContent: prepared.fileContent },
+          headers: { Authorization: 'Bearer ' + SUPABASE_KEY },
         });
 
         if (fnError) throw new Error('AI processing failed: ' + fnError.message);
