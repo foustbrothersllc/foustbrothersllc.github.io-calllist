@@ -464,8 +464,8 @@ function initApp() {
   let editingKey          = null;
   let pendingDeleteKey    = null;
   const selectedKeys      = new Set();
-  // 'last' = "Smith, John"  |  'first' = "John Smith"
-  let nameOrder = localStorage.getItem('dcl_name_order') || 'last';
+  // Always display as "Last, First"
+  const nameOrder = 'last';
 
   // ── Haptic feedback ──────────────────────────────────────────
   // Default ON. Stored as 'off' when disabled so new installs get haptics.
@@ -1929,57 +1929,6 @@ function initApp() {
   btnCancel.addEventListener('click', closePanel);
   panelOverlay.addEventListener('click', closePanel);
   btnSave.addEventListener('click', saveDriver);
-
-  // ── Settings modal ───────────────────────────────────────────
-  (function initSettings() {
-    const settingsModal   = document.getElementById('settingsModal');
-    const settingsClose   = document.getElementById('settingsClose');
-    const settingsNameSub = document.getElementById('settingsNameSub');
-    const settingsNameToggle = document.getElementById('settingsNameToggle');
-    const hapticToggle    = document.getElementById('settingsHapticToggle');
-
-    function updateNameSub() {
-      settingsNameSub.textContent = nameOrder === 'last' ? 'Last, First (e.g. Smith, John)' : 'First Last (e.g. John Smith)';
-    }
-    function updateHapticToggle() {
-      hapticToggle.textContent = hapticEnabled ? 'On' : 'Off';
-      hapticToggle.style.background = hapticEnabled ? '#FFB500' : 'rgba(255,255,255,0.15)';
-      hapticToggle.style.color = hapticEnabled ? '#1e0f0b' : '#fff';
-    }
-
-    document.getElementById('btnSettings').addEventListener('click', function() {
-      haptic('light');
-      updateNameSub();
-      updateHapticToggle();
-      settingsModal.classList.add('open');
-    });
-
-    settingsClose.addEventListener('click', function() { settingsModal.classList.remove('open'); });
-    settingsModal.addEventListener('click', function(e) { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
-
-    settingsNameToggle.addEventListener('click', function() {
-      haptic('light');
-      nameOrder = nameOrder === 'last' ? 'first' : 'last';
-      localStorage.setItem('dcl_name_order', nameOrder);
-      updateNameSub();
-
-      // Re-sort the driver list and re-render — simpler and bulletproof
-      const drivers = Array.from(driverMap.values());
-      drivers.sort(function(a, b) {
-        const ka = nameOrder === 'first' ? (a.firstName + a.lastName).toLowerCase() : (a.lastName + a.firstName).toLowerCase();
-        const kb = nameOrder === 'first' ? (b.firstName + b.lastName).toLowerCase() : (b.lastName + b.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      renderCards(drivers);
-    });
-
-    hapticToggle.addEventListener('click', function() {
-      hapticEnabled = !hapticEnabled;
-      localStorage.setItem('dcl_haptic', hapticEnabled ? 'on' : 'off');
-      haptic('light'); // one last buzz if turning on
-      updateHapticToggle();
-    });
-  })();
 
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
   document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
