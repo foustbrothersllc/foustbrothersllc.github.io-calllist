@@ -1873,6 +1873,8 @@ function initApp() {
   }
 
   function attachSnapshot() {
+    let cacheRendered = false; // tracks whether cache already painted the list
+
     // ── Step 1: show cache instantly ────────────────────────────
     cacheGetAll().then(async function(rows) {
       if (rows.length === 0) return; // nothing cached yet — wait for network
@@ -1886,6 +1888,7 @@ function initApp() {
         return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
       renderCards(drivers);
+      cacheRendered = true;
       firstSnapshot = false; // cache rendered — real-time can now apply deltas
     });
 
@@ -1909,7 +1912,15 @@ function initApp() {
         await cachePutAll(data || []);
         if (navigator.onLine) hideOfflineBanner();
         removeLoadingMsg();
-        // Full re-render with latest server data
+        // Only re-render if count differs from cache — avoids double paint
+        // when Supabase returns the same data that was already cached.
+        const serverCount = (data || []).length;
+        if (cacheRendered && serverCount === allCards.length) {
+          // Same number of drivers — just update the cache, no re-render needed
+          firstSnapshot = false;
+          return;
+        }
+        // Different data — full re-render with latest server data
         const drivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
