@@ -58,14 +58,14 @@ const ADMIN_PASSWORD_HASH = 'e4fd70411a4f3e212ff4c97af82e38a066aa376af494d50247c
 // ── AES-256-GCM encryption helpers ──────────────────────────
 // Key is derived from a passphrase hashed at runtime from user input.
 // The passphrase itself is never stored — derived from the access key the user types.
-const ENC_PASSPHRASE_HASH = 'd3c5306c3cc26f4daf167f3515d0fe591dbe9164ee844afa8418b47765e7f9dc';
+const ENC_PASSPHRASE = 'driverlist-UPSFeederDriver-2024'; // encryption key — must match existing Firestore data
 const ENC_SALT_HEX   = '4a3f2b1c8d9e0f5a'; // fixed salt
 
 async function getEncKey() {
   if (getEncKey._cached) return getEncKey._cached;
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(ENC_PASSPHRASE_HASH), 'PBKDF2', false, ['deriveKey']
+    'raw', enc.encode(ENC_PASSPHRASE), 'PBKDF2', false, ['deriveKey']
   );
   const salt = hexToBytes(ENC_SALT_HEX);
   getEncKey._cached = await crypto.subtle.deriveKey(
