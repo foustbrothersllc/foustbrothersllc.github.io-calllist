@@ -843,7 +843,13 @@ function initApp() {
   }
 
   // ── Render all cards (RAF-batched for smooth performance) ────
+  let _renderToken = 0; // incremented each render call to cancel stale RAF batches
+
   function renderCards(drivers) {
+    // Cancel any in-progress render — prevents doubles when cache + network
+    // both call renderCards before the first RAF loop finishes.
+    const token = ++_renderToken;
+
     allCards.forEach(c => c.remove());
     driverSet.clear();
     driverMap.clear();
@@ -853,6 +859,7 @@ function initApp() {
     let index = 0;
 
     function renderBatch() {
+      if (token !== _renderToken) return; // a newer render started — stop this one
       const frag = document.createDocumentFragment();
       const end  = Math.min(index + BATCH, drivers.length);
       for (let i = index; i < end; i++) {
