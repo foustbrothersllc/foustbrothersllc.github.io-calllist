@@ -153,6 +153,12 @@ async function decryptDriver(raw) {
 let isAdmin = false;
 
 // ── Access gate ──────────────────────────────────────────────
+// ── SHA-256 helper (top-level so both initAccessGate and initApp can use it) ──
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 (function initAccessGate() {
   const gate       = document.getElementById('accessGate');
   const appWrapper = document.getElementById('appWrapper');
@@ -286,11 +292,6 @@ let isAdmin = false;
         showRecoveryPrompt();
       }
     });
-  }
-
-  async function sha256(str) {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   function getRecoveryAttempts() {
