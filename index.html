@@ -94,7 +94,6 @@
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
         <button id="btnScanDups"  class="btn-admin">🔍 Possibly Retired</button>
-        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
         <button id="btnNoPhone"   class="btn-admin">📵 No Phone</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
@@ -166,7 +165,7 @@
       <div class="modal" style="max-width:420px;border-top-color:#351C15;">
         <div class="modal-icon">📋</div>
         <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
-        <p class="modal-body">Upload a <code>.pdf</code> or <code>.xlsx</code> file. AI will read the file and convert it automatically. Existing drivers will be updated, new ones added.</p>
+        <p class="modal-body">Upload an <code>.xlsx</code> or <code>.json</code> file. Existing drivers will be updated, new ones added.</p>
 
         <!-- Progress bar -->
         <div id="importProgressWrap" style="display:none;margin-bottom:10px;">
@@ -177,8 +176,8 @@
         </div>
 
         <div style="margin-bottom:14px;">
-          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose PDF or Excel file</label>
-          <input type="file" id="importFileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;">
+          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel or JSON file</label>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;color:#351C15;">
         </div>
 
         <!-- Update log -->
@@ -256,8 +255,6 @@
 
   <!-- SheetJS for Excel parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <!-- pdf.js from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
