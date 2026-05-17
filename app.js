@@ -908,10 +908,15 @@ function initApp() {
         listEl.insertBefore(newOuter, noResults);
       }
     } else {
+      const sortKey = function(d) {
+        return nameOrder === 'first'
+          ? (d.firstName + d.lastName).toLowerCase()
+          : (d.lastName + d.firstName).toLowerCase();
+      };
       const insertBefore = allCards.find(function(c) {
         const cd = driverMap.get(c.dataset.key);
         if (!cd) return false;
-        return (cd.lastName + cd.firstName).toLowerCase() > (driver.lastName + driver.firstName).toLowerCase();
+        return sortKey(cd) > sortKey(driver);
       });
       if (insertBefore) {
         listEl.insertBefore(newOuter, insertBefore);
@@ -1684,7 +1689,8 @@ function initApp() {
       nameOrder = nameOrder === 'last' ? 'first' : 'last';
       localStorage.setItem('dcl_name_order', nameOrder);
       updateLabel();
-      // Re-render all name labels without rebuilding cards
+
+      // Update all name labels
       allCards.forEach(function(outer) {
         const key = outer.dataset.key;
         const driver = driverMap.get(key);
@@ -1696,6 +1702,24 @@ function initApp() {
             : driver.lastName + ', ' + driver.firstName;
         }
       });
+
+      // Re-sort cards in the DOM to match the new name order
+      allCards.sort(function(a, b) {
+        const da = driverMap.get(a.dataset.key);
+        const db = driverMap.get(b.dataset.key);
+        if (!da || !db) return 0;
+        const ka = nameOrder === 'first'
+          ? (da.firstName + da.lastName).toLowerCase()
+          : (da.lastName + da.firstName).toLowerCase();
+        const kb = nameOrder === 'first'
+          ? (db.firstName + db.lastName).toLowerCase()
+          : (db.lastName + db.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      // Re-insert in sorted order using a fragment for one reflow
+      const frag = document.createDocumentFragment();
+      allCards.forEach(function(outer) { frag.appendChild(outer); });
+      listEl.insertBefore(frag, noResults);
     });
     filterRow.appendChild(btn);
   })();
