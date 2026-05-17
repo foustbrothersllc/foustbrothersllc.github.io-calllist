@@ -1116,16 +1116,17 @@ function initApp() {
     unlockBtn.addEventListener('click', function() {
       sha256(pwInput.value).then(function(hash) {
         if (hash === ADMIN_PASSWORD_HASH) {
-        backdrop.remove();
-        isAdmin = true;
-        localStorage.setItem('dcl_admin', '1');
-        showAdminControls();
-        renderCards(Array.from(driverMap.values()));
-      } else {
-        errorEl.textContent = '\u274c Incorrect password.';
-        pwInput.value = '';
-        pwInput.focus();
-      }
+          backdrop.remove();
+          isAdmin = true;
+          localStorage.setItem('dcl_admin', '1');
+          showAdminControls();
+          renderCards(Array.from(driverMap.values()));
+        } else {
+          errorEl.textContent = '\u274c Incorrect password.';
+          pwInput.value = '';
+          pwInput.focus();
+        }
+      });
     });
   }
 
