@@ -1842,26 +1842,26 @@ function initApp() {
         if (navigator.onLine) hideOfflineBanner();
         else if (snapshot.metadata.fromCache) showOfflineBanner();
 
-        const drivers = [];
-        for (const d of snapshot.docs) {
-          const decrypted = await decryptDriver(d.data());
-          drivers.push(decrypted);
-        }
-        drivers.sort(function(a, b) {
-          const ka = (a.lastName + a.firstName).toLowerCase();
-          const kb = (b.lastName + b.firstName).toLowerCase();
-          return ka < kb ? -1 : ka > kb ? 1 : 0;
-        });
-
         if (firstSnapshot) {
+          // First load: decrypt all docs, sort, and render
           firstSnapshot = false;
+          const drivers = [];
+          for (const d of snapshot.docs) {
+            const decrypted = await decryptDriver(d.data());
+            drivers.push(decrypted);
+          }
+          drivers.sort(function(a, b) {
+            const ka = (a.lastName + a.firstName).toLowerCase();
+            const kb = (b.lastName + b.firstName).toLowerCase();
+            return ka < kb ? -1 : ka > kb ? 1 : 0;
+          });
           renderCards(drivers);
         } else {
-          // Incremental update: only re-render changed docs so edits by
-          // another admin session appear live without a full list rebuild.
-          snapshot.docChanges().forEach(async function(change) {
-            const raw = change.doc.data();
-            const driver = await decryptDriver(raw);
+          // Incremental update: process changes sequentially with for..of so
+          // each decrypt is properly awaited before the next, then applyFilter
+          // once at the end — fixes freeze caused by async forEach + early applyFilter.
+          for (const change of snapshot.docChanges()) {
+            const driver = await decryptDriver(change.doc.data());
             if (change.type === 'removed') {
               const key = driverKey(driver.lastName, driver.firstName);
               const outer = listEl.querySelector('.card-outer[data-key="' + keyToDocId(key) + '"]')
@@ -1871,9 +1871,9 @@ function initApp() {
               if (outer) animateRemove(outer);
               allCards = allCards.filter(c => c !== outer);
             } else {
-              upsertDriver(driver).catch(console.error);
+              await upsertDriver(driver);
             }
-          });
+          }
           applyFilter();
         }
       },
