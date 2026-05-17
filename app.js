@@ -1801,9 +1801,43 @@ function initApp() {
   }
   function closeImportModal() { importModal.classList.remove('open'); }
 
+  // ── Convert file to what the Edge Function expects ───────────
+  async function prepareFileForAI(file) {
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith('.pdf')) {
+      // Send PDF as base64 directly to Gemini via Edge Function
+      const buffer = await file.arrayBuffer();
+      const bytes  = new Uint8Array(buffer);
+      let binary   = '';
+      bytes.forEach(function(b) { binary += String.fromCharCode(b); });
+      return { fileType: 'pdf', fileContent: btoa(binary) };
+    }
+
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      // Convert Excel to CSV text using SheetJS
+      const buffer = await file.arrayBuffer();
+      const wb     = XLSX.read(buffer, { type: 'array' });
+      // Grab the first sheet
+      const ws     = wb.Sheets[wb.SheetNames[0]];
+      const csv    = XLSX.utils.sheet_to_csv(ws);
+      return { fileType: 'excel', fileContent: csv };
+    }
+
+    if (name.endsWith('.json')) {
+      // Legacy JSON — skip AI, parse directly
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) throw new Error('JSON file must be an array.');
+      return { fileType: 'json', fileContent: null, drivers: data };
+    }
+
+    throw new Error('Unsupported file type. Use PDF, Excel (.xlsx), or JSON.');
+  }
+
   async function runImport() {
     const file = importFileInput.files[0];
-    if (!file) { importStatus.textContent = '⚠️ Please choose a JSON or PDF file first.'; return; }
+    if (!file) { importStatus.textContent = '⚠️ Please choose a PDF, Excel, or JSON file first.'; return; }
 
     importConfirm.disabled = true;
     importConfirm.textContent = 'Analyzing…';
@@ -1812,18 +1846,47 @@ function initApp() {
 
     let newDrivers;
     try {
-      if (file.name.toLowerCase().endsWith('.pdf')) {
-        importStatus.textContent = 'Parsing PDF…';
-        setProgress(15, 'Extracting text from PDF…');
-        const text = await extractTextFromPdf(file);
-        setProgress(35, 'Parsing driver records…');
-        newDrivers = parsePdfText(text);
-        if (newDrivers.length === 0) throw new Error('No driver records found in PDF. Check formatting.');
+      const prepared = await prepareFileForAI(file);
+
+      if (prepared.fileType === 'json') {
+        // Legacy path — no AI needed
+        newDrivers = prepared.drivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
+        setProgress(35, 'JSON parsed…');
       } else {
-        const text = await file.text();
-        newDrivers = JSON.parse(text);
-        if (!Array.isArray(newDrivers)) throw new Error('File must be a JSON array.');
-        newDrivers = newDrivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
+        // ── Send to Supabase Edge Function → Gemini ──────────
+        importStatus.textContent = '🤖 AI is reading your file…';
+        setProgress(20, 'Sending to AI…');
+
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
+          body: { fileType: prepared.fileType, fileContent: prepared.fileContent },
+        });
+
+        if (fnError) throw new Error('AI processing failed: ' + fnError.message);
+        if (fnData.error) throw new Error('AI error: ' + fnData.error);
+        if (!fnData.drivers || fnData.drivers.length === 0) {
+          throw new Error('AI found no driver records in the file. Check the file has driver data.');
+        }
+
+        setProgress(35, 'AI found ' + fnData.drivers.length + ' drivers…');
+        importStatus.textContent = '✅ AI found ' + fnData.drivers.length + ' drivers — reviewing…';
+
+        // Normalise location values and phone objects
+        newDrivers = fnData.drivers.map(function(d) {
+          function cleanPhone(p) {
+            if (!p || !p.digits) return null;
+            const digits = normalisePhone(p.digits);
+            return digits ? { digits, display: formatPhone(digits) } : null;
+          }
+          return {
+            lastName:  (d.lastName  || '').trim(),
+            firstName: (d.firstName || '').trim(),
+            location:  normaliseSlic(d.location || 'Greensboro'),
+            phone:     cleanPhone(d.phone),
+            altPhone:  cleanPhone(d.altPhone),
+          };
+        }).filter(function(d) { return d.lastName && d.firstName; });
+
+        if (newDrivers.length === 0) throw new Error('No valid driver records after processing.');
       }
     } catch(e) {
       importStatus.textContent = '❌ ' + e.message;
