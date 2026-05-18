@@ -2207,6 +2207,30 @@ function initApp() {
   panelClose.addEventListener('click', closePanel);
   btnCancel.addEventListener('click', closePanel);
   panelOverlay.addEventListener('click', closePanel);
+
+  // ── Live phone formatting as you type ───────────────────────
+  function liveFormatPhone(e) {
+    const input  = e.target;
+    const digits = input.value.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) { input.value = ''; return; }
+    let formatted = '';
+    if (digits.length <= 3) {
+      formatted = '(' + digits;
+    } else if (digits.length <= 6) {
+      formatted = '(' + digits.slice(0,3) + ') ' + digits.slice(3);
+    } else {
+      formatted = '(' + digits.slice(0,3) + ') ' + digits.slice(3,6) + '-' + digits.slice(6);
+    }
+    const pos    = input.selectionStart;
+    const diff   = formatted.length - input.value.length;
+    input.value  = formatted;
+    const newPos = Math.max(0, pos + diff);
+    input.setSelectionRange(newPos, newPos);
+  }
+
+  inputPhone.addEventListener('input', liveFormatPhone);
+  inputAltPhone.addEventListener('input', liveFormatPhone);
+
   btnSave.addEventListener('click', saveDriver);
 
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
