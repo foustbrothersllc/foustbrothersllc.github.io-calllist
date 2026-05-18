@@ -1622,10 +1622,7 @@ function initApp() {
 
   dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
 
-  document.getElementById('dupMarkClean').addEventListener('click', function() {
-    localStorage.removeItem('dcl_last_import');
-    dupModal.classList.remove('open');
-  });
+  var _mc = document.getElementById('dupMarkClean'); if (_mc) _mc.addEventListener('click', function() { localStorage.removeItem('dcl_last_import'); dupModal.classList.remove('open'); });
 
   function commitCleanup(mode) {
     const keys = window.__cleanupSelected || [];
@@ -1676,8 +1673,8 @@ function initApp() {
     deleteModal.addEventListener('click', onBackdrop);
   }
 
-  document.getElementById('dupRetireSelected').addEventListener('click', function() { confirmCleanup('retire'); });
-  document.getElementById('dupDeleteSelected').addEventListener('click', function() { confirmCleanup('delete'); });
+  var _rs = document.getElementById('dupRetireSelected'); if (_rs) _rs.addEventListener('click', function() { confirmCleanup('retire'); });
+  var _ds = document.getElementById('dupDeleteSelected'); if (_ds) _ds.addEventListener('click', function() { confirmCleanup('delete'); });
 
   // ── Retired Drivers Modal ─────────────────────────────────────
   async function openRetiredModal() {
