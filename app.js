@@ -1493,18 +1493,14 @@ function initApp() {
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
 
-    // ── Section 1: Duplicate phone numbers ────────────────────
+    // ── Section 1: Duplicate PRIMARY phone numbers only ───────
+    // Only flag when the same number is the primary phone for 2+ different drivers
     const phoneMap = new Map(); // digits → [key, ...]
     driverMap.forEach(function(d, key) {
       if (d.phone && d.phone.digits) {
         const arr = phoneMap.get(d.phone.digits) || [];
         arr.push(key);
         phoneMap.set(d.phone.digits, arr);
-      }
-      if (d.altPhone && d.altPhone.digits) {
-        const arr = phoneMap.get(d.altPhone.digits) || [];
-        arr.push(key);
-        phoneMap.set(d.altPhone.digits, arr);
       }
     });
 
@@ -1516,7 +1512,7 @@ function initApp() {
     if (dupPhones.length > 0) {
       const secHeader = document.createElement('p');
       secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
-      secHeader.textContent = '⚠️ Duplicate Phone Numbers (' + dupPhones.length + ')';
+      secHeader.textContent = '⚠️ Duplicate Primary Numbers (' + dupPhones.length + ')';
       dupResults.appendChild(secHeader);
 
       dupPhones.forEach(function(item) {
@@ -1550,7 +1546,6 @@ function initApp() {
       noImport.textContent = 'Run an import to see possibly retired drivers.';
       dupResults.appendChild(noImport);
       if (dupDeleteAll) dupDeleteAll.style.display = 'none';
-      if (dupDeleteAll) dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
       dupModal.classList.add('open');
       return;
     }
