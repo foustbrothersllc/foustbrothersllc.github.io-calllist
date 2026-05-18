@@ -1440,7 +1440,7 @@ function initApp() {
     // Reuse the dup modal but only show the no-phone section
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
-    dupDeleteAll.style.display = 'none';
+    if(dupDeleteAll)dupDeleteAll.style.display = 'none';
 
     const noPhone = [];
     driverMap.forEach(function(d, key) {
@@ -1474,7 +1474,7 @@ function initApp() {
         cb.addEventListener('change', function() {
           if (cb.checked) window.__retiredKeysToDelete.push(key);
           else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
-          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+          if(dupDeleteAll)dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
         });
         const label = document.createElement('span');
         label.style.cssText = 'font-size:13px;color:#ffffff;';
@@ -1483,7 +1483,7 @@ function initApp() {
         row.appendChild(label);
         dupResults.appendChild(row);
       });
-      dupDeleteAll.style.display = noPhone.length > 0 ? 'block' : 'none';
+      if(dupDeleteAll)dupDeleteAll.style.display = noPhone.length > 0 ? 'block' : 'none';
     }
 
     dupModal.classList.add('open');
@@ -1549,8 +1549,8 @@ function initApp() {
       noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
       noImport.textContent = 'Run an import to see possibly retired drivers.';
       dupResults.appendChild(noImport);
-      if (dupPhones.length === 0) dupDeleteAll.style.display = 'none';
-      else dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
+      if (dupDeleteAll) dupDeleteAll.style.display = 'none';
+      if (dupDeleteAll) dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
       dupModal.classList.add('open');
       return;
     }
@@ -1573,9 +1573,9 @@ function initApp() {
       okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
       okEl.textContent = '✅ All GRENC drivers were on the last import.';
       dupResults.appendChild(okEl);
-      dupDeleteAll.style.display = 'none';
+      if(dupDeleteAll)dupDeleteAll.style.display = 'none';
     } else {
-      dupDeleteAll.style.display = 'block';
+      if(dupDeleteAll)dupDeleteAll.style.display = 'block';
       const impHeader = document.createElement('p');
       impHeader.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:8px;';
       impHeader.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
@@ -1639,7 +1639,7 @@ function initApp() {
         cb.addEventListener('change', function() {
           if (cb.checked) window.__retiredKeysToDelete.push(key);
           else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
-          dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+          if(dupDeleteAll)dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
         });
         const label = document.createElement('span');
         label.style.cssText = 'font-size:13px;color:#ffffff;';
@@ -1648,7 +1648,7 @@ function initApp() {
         row.appendChild(label);
         dupResults.appendChild(row);
       });
-      dupDeleteAll.style.display = 'block';
+      if(dupDeleteAll)dupDeleteAll.style.display = 'block';
     }
 
     dupModal.classList.add('open');
