@@ -1053,7 +1053,8 @@ function initApp() {
     const query = searchBox.value.toLowerCase().trim();
     let visible = 0;
     allCards.forEach(function(outer) {
-      const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
+      const isRetired = outer.dataset.location === 'retired';
+      const locMatch  = !isRetired && (activeFilter === 'all' || outer.dataset.location === activeFilter);
       const textMatch = !query || outer.dataset.search.includes(query);
       const show = locMatch && textMatch;
       outer.style.display = show ? '' : 'none';
@@ -1546,7 +1547,7 @@ function initApp() {
     if (!meta) {
       const noImport = document.createElement('p');
       noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
-      noImport.textContent = 'Run an import to see possibly retired drivers.';
+      noImport.textContent = 'Run an import to see retired drivers not on the last import.';
       dupResults.appendChild(noImport);
       if (dupDeleteAll) dupDeleteAll.style.display = 'none';
       dupModal.classList.add('open');
@@ -1563,7 +1564,7 @@ function initApp() {
 
     const secHeader2 = document.createElement('p');
     secHeader2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
-    secHeader2.textContent = 'Possibly Retired – GRENC (' + possibly.length + ')';
+    secHeader2.textContent = 'Retired – GRENC (' + possibly.length + ')';
     dupResults.appendChild(secHeader2);
 
     if (possibly.length === 0) {
