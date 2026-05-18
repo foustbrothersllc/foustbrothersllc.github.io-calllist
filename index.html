@@ -93,8 +93,8 @@
       <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
-        <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
-        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
+        <button id="btnScanDups"  class="btn-admin">🔍 Possibly Retired</button>
+        <button id="btnNoPhone"   class="btn-admin">📵 No Phone</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
     </header>
@@ -123,8 +123,6 @@
             <select id="inputLocation">
               <option value="Greensboro">GRENC</option>
               <option value="Mebane">MEBNC</option>
-              <option value="" disabled>──────────</option>
-              <option value="Retired">🏷 Mark as Retired</option>
             </select>
           </div>
         </div>
@@ -167,7 +165,7 @@
       <div class="modal" style="max-width:420px;border-top-color:#351C15;">
         <div class="modal-icon">📋</div>
         <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
-        <p class="modal-body">Upload a <code>.pdf</code> or <code>.xlsx</code> file. AI will read the file and convert it automatically. Existing drivers will be updated, new ones added.</p>
+        <p class="modal-body">Upload a <code>.xlsx</code> or <code>.json</code> file. AI will read the file and convert it automatically. Existing drivers will be updated, new ones added.</p>
 
         <!-- Progress bar -->
         <div id="importProgressWrap" style="display:none;margin-bottom:10px;">
@@ -178,8 +176,8 @@
         </div>
 
         <div style="margin-bottom:14px;">
-          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose PDF or Excel file</label>
-          <input type="file" id="importFileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;">
+          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#351C15;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel or JSON file</label>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;color:#1a0f0a;">
         </div>
 
         <!-- Update log -->
@@ -196,17 +194,15 @@
       </div>
     </div>
 
-    <!-- List Cleanup Modal -->
+    <!-- Duplicate Scan Modal -->
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
-        <div class="modal-icon">🧹</div>
-        <h2 class="modal-title">List Cleanup</h2>
-        <div id="dupResults" style="max-height:50vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
-        <div class="modal-actions" style="flex-wrap:wrap;gap:6px;">
-          <button class="btn-modal-cancel" id="dupClose" style="flex:1 1 100%;">Close</button>
-          <button class="btn-delete-confirm" id="dupRetireSelected" style="background:#7a6055;display:none;flex:1;">🏷 Retire</button>
-          <button class="btn-delete-confirm" id="dupDeleteSelected" style="background:#b91c1c;display:none;flex:1;">🗑 Delete</button>
-          <button class="btn-delete-confirm" id="dupMarkClean" style="background:#166534;display:none;flex:1 1 100%;">✅ Mark List as Clean</button>
+        <div class="modal-icon">👴</div>
+        <h2 class="modal-title">Possibly Retired</h2>
+        <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="dupClose">Close</button>
+          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
         </div>
       </div>
     </div>
