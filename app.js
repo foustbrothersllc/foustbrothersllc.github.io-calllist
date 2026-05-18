@@ -1654,8 +1654,8 @@ function initApp() {
     dupModal.classList.add('open');
   }
 
-  dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
-  dupDeleteAll.addEventListener('click', function() {
+  if (dupClose) dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
+  if (dupDeleteAll) dupDeleteAll.addEventListener('click', function() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
     keys.forEach(function(key) {
@@ -2066,9 +2066,9 @@ function initApp() {
     }
   }
 
-  importCancel.addEventListener('click', closeImportModal);
-  importConfirm.addEventListener('click', function() { runImport().catch(function(e) { if (e && e.message !== 'cancelled') console.error(e); }); });
-  importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
+  if (importCancel) importCancel.addEventListener('click', closeImportModal);
+  if (importConfirm) importConfirm.addEventListener('click', function() { runImport().catch(function(e) { if (e && e.message !== 'cancelled') console.error(e); }); });
+  if (importModal) importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
 
   // ── Event listeners ──────────────────────────────────────────
   const searchClearBtn = document.getElementById('searchClear');
@@ -2077,8 +2077,8 @@ function initApp() {
     if (searchClearBtn) searchClearBtn.style.display = searchBox.value ? 'block' : 'none';
   }
 
-  searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
-  searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
+  if (searchBox) searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
+  if (searchBox) searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
 
   if (searchClearBtn) {
     searchClearBtn.addEventListener('click', function() {
@@ -2103,20 +2103,24 @@ function initApp() {
       applyFilter();
     });
   });
-  // (name order toggle moved to Settings modal)
-  fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
-  panelClose.addEventListener('click', closePanel);
-  btnCancel.addEventListener('click', closePanel);
-  panelOverlay.addEventListener('click', closePanel);
-  btnSave.addEventListener('click', saveDriver);
 
-  document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
-  document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
-  document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
-  document.getElementById('btnImport').addEventListener('click', openImportModal);
-  document.getElementById('btnScanDups').addEventListener('click', openDupModal);
-  document.getElementById('btnNoPhone').addEventListener('click', openNoPhoneModal);
-  document.getElementById('btnExport').addEventListener('click', exportJson);
+  if (fabAdd) fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
+  if (panelClose) panelClose.addEventListener('click', closePanel);
+  if (btnCancel) btnCancel.addEventListener('click', closePanel);
+  if (panelOverlay) panelOverlay.addEventListener('click', closePanel);
+  if (btnSave) btnSave.addEventListener('click', saveDriver);
+
+  function safeListener(id, fn) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+  safeListener('btnAdminLogin', promptAdminLogin);
+  safeListener('btnAdminLogoutHeader', adminLogout);
+  safeListener('btnSeedDb', manualSeed);
+  safeListener('btnImport', openImportModal);
+  safeListener('btnScanDups', openDupModal);
+  safeListener('btnNoPhone', openNoPhoneModal);
+  safeListener('btnExport', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
   if (localStorage.getItem('dcl_admin') === '1') {
@@ -2287,8 +2291,7 @@ function initApp() {
         req.onerror   = function() { resolve([]); };
       });
       // Rows store { id, driver } — driver is already decrypted and pre-sorted.
-      // Filter out retired drivers so they never appear in the active list from cache.
-      return rows.map(function(r) { return r.driver; }).filter(function(d) { return !d.retired; });
+      return rows.map(function(r) { return r.driver; });
     } catch(_) { return []; }
   }
 
@@ -2383,11 +2386,10 @@ function initApp() {
           return;
         }
 
-        // Data changed — decrypt, cache, re-render (exclude retired drivers).
-        const allDrivers = await Promise.all(
+        // Data changed — decrypt, cache, re-render.
+        const drivers = await Promise.all(
           (data || []).map(function(row) { return decryptDriver(row.data); })
         );
-        const drivers = allDrivers.filter(function(d) { return !d.retired; });
         drivers.sort(function(a, b) {
           const ka = (a.lastName + a.firstName).toLowerCase();
           const kb = (b.lastName + b.firstName).toLowerCase();
@@ -2417,17 +2419,7 @@ function initApp() {
             // INSERT or UPDATE
             await cachePut(payload.new);
             const driver = await decryptDriver(payload.new.data);
-            // If driver was just marked retired, remove from active list
-            if (driver.retired) {
-              const rKey = payload.new.id;
-              if (driverSet.has(rKey)) {
-                driverSet.delete(rKey); driverMap.delete(rKey);
-                const outer = listEl.querySelector('.card-outer[data-key="' + rKey + '"]');
-                if (outer) { animateRemove(outer); allCards = allCards.filter(function(c){ return c !== outer; }); }
-              }
-            } else {
-              upsertDriver(driver);
-            }
+            upsertDriver(driver);
             applyFilter();
           }
         }
