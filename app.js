@@ -1517,14 +1517,11 @@ function initApp() {
 
     // Section 1: Same primary & alt number
     const sameBoth = [];
-    console.log('openDupModal: scanning', driverMap.size, 'drivers for same primary/alt');
     driverMap.forEach(function(d, key) {
-      if (d.phone && d.altPhone) {
-        console.log('has both phones:', d.lastName, d.firstName, d.phone.digits, d.altPhone.digits);
-        if (d.phone.digits && d.altPhone.digits &&
-            d.phone.digits.replace(/\D/g,'') === d.altPhone.digits.replace(/\D/g,''))
-          sameBoth.push({ key: key, d: d });
-      }
+      if (d.phone && d.altPhone &&
+          d.phone.digits && d.altPhone.digits &&
+          d.phone.digits.replace(/\D/g,'') === d.altPhone.digits.replace(/\D/g,''))
+        sameBoth.push({ key: key, d: d });
     });
     const sec1hdr = makeHeader('🔁', 'Same Primary & Alt Number (' + sameBoth.length + ')', '#FFB500');
     dupResults.appendChild(sec1hdr);
