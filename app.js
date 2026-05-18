@@ -1096,13 +1096,16 @@ function initApp() {
       function onConfirm() {
         const rd = Object.assign({}, driver, { retired: true, retiredAt: new Date().toISOString() });
         encryptDriver(rd).then(function(enc) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function(r){ if(r.error) console.error(r.error); });
+          const docId = keyToDocId(key);
+          // Write retired record to IDB cache immediately so reload doesn't resurrect them
+          cachePut({ id: docId, data: enc });
+          supabase.from('drivers').upsert({ id: docId, data: enc }).then(function(r){ if(r.error) console.error(r.error); });
         });
         driverSet.delete(key); driverMap.delete(key);
         const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
         if (outer) animateRemove(outer);
         allCards = allCards.filter(function(c){ return c !== outer; });
-        cacheDelete(keyToDocId(key)); applyFilter();
+        applyFilter();
         inputLocation.removeEventListener('change', onLocationChange);
         deleteModal.classList.remove('open'); deleteConfirm.textContent = origText;
         cleanup(); closePanel();
