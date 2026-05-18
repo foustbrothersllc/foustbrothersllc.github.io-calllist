@@ -94,7 +94,7 @@
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
         <button id="btnNoPhone"   class="btn-admin">🧹 Clean Up List</button>
-        <button id="btnScanDups"  class="btn-admin">👴 Possibly Retired</button>
+        <button id="btnScanDups"  class="btn-admin">👴 Retired</button>
         <button id="btnExport"    class="btn-admin">💾 Export</button>
       </div>
     </header>
@@ -123,6 +123,7 @@
             <select id="inputLocation">
               <option value="Greensboro">GRENC</option>
               <option value="Mebane">MEBNC</option>
+              <option disabled>────────────</option>
               <option value="Retired">Retired</option>
             </select>
           </div>
@@ -199,7 +200,7 @@
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
         <div class="modal-icon">👴</div>
-        <h2 class="modal-title">Possibly Retired</h2>
+        <h2 class="modal-title">Retired</h2>
         <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
         <div class="modal-actions">
           <button class="btn-modal-cancel" id="dupClose">Close</button>
