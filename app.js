@@ -1591,14 +1591,73 @@ function initApp() {
       dupResults.appendChild(divider);
     }
 
+    // ── Section 1b: Same primary & alt phone ─────────────────
+    const samePhoneDrivers = [];
+    driverMap.forEach(function(d, key) {
+      if (d.phone && d.phone.digits && d.altPhone && d.altPhone.digits &&
+          d.phone.digits === d.altPhone.digits) {
+        samePhoneDrivers.push({ key, d });
+      }
+    });
+    samePhoneDrivers.sort(function(a, b) {
+      const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+      const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+
+    const samePhoneHeader = document.createElement('p');
+    samePhoneHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#fb923c;margin-bottom:6px;';
+    samePhoneHeader.textContent = '🔁 Same Primary & Alt Phone (' + samePhoneDrivers.length + ')';
+    dupResults.appendChild(samePhoneHeader);
+
+    if (samePhoneDrivers.length === 0) {
+      const okSpEl = document.createElement('p');
+      okSpEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
+      okSpEl.textContent = '✅ No drivers with duplicate alt phone.';
+      dupResults.appendChild(okSpEl);
+    } else {
+      samePhoneDrivers.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#fb923c';
+        // Checking this marks the driver for alt-phone-clear (not deletion)
+        cb.dataset.clearAlt = 'true';
+        cb.addEventListener('change', function() {
+          if (cb.checked) {
+            window.__retiredKeysToDelete.push('__clearalt__' + key);
+          } else {
+            window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== '__clearalt__' + key);
+          }
+          if (dupDeleteAll) dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:13px;color:#fed7aa;flex:1;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + formatPhone(d.phone.digits) + ' (remove alt)';
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+    }
+
+    const dividerSP = document.createElement('div');
+    dividerSP.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+    dupResults.appendChild(dividerSP);
+
     // ── Section 2: Possibly retired (not on last import) ──────
     const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
     if (!meta) {
-      const noImport = document.createElement('p');
-      noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
-      noImport.textContent = 'For Retired Drivers — run an import to also see GRENC drivers not on the last import.';
-      dupResults.appendChild(noImport);
-      if (dupDeleteAll) dupDeleteAll.style.display = 'none';
+      // Only show the hint message if no explicitly-retired drivers exist
+      if (retiredDrivers.length === 0) {
+        const noImport = document.createElement('p');
+        noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
+        noImport.textContent = 'For Retired Drivers — run an import to also see GRENC drivers not on the last import.';
+        dupResults.appendChild(noImport);
+      }
+      if (dupDeleteAll) dupDeleteAll.style.display = retiredDrivers.length > 0 ? 'block' : 'none';
       dupModal.classList.add('open');
       return;
     }
@@ -1707,18 +1766,39 @@ function initApp() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
 
-    // Show confirmation before deleting
-    const count = keys.length;
-    const confirmMsg = 'Remove ' + count + ' driver' + (count === 1 ? '' : 's') + '? This cannot be undone.';
+    const deleteKeys   = keys.filter(function(k) { return k.indexOf('__clearalt__') !== 0; });
+    const clearAltKeys = keys.filter(function(k) { return k.indexOf('__clearalt__') === 0; }).map(function(k) { return k.replace('__clearalt__', ''); });
+
+    const delCount   = deleteKeys.length;
+    const clearCount = clearAltKeys.length;
+    const parts = [];
+    if (delCount  > 0) parts.push('remove ' + delCount  + ' driver' + (delCount  !== 1 ? 's' : ''));
+    if (clearCount > 0) parts.push('clear the alt phone for ' + clearCount + ' driver' + (clearCount !== 1 ? 's' : ''));
+    const rawMsg = (parts.join(' and ') || 'nothing') + '? This cannot be undone.';
+    const confirmMsg = rawMsg.charAt(0).toUpperCase() + rawMsg.slice(1);
     if (!window.confirm(confirmMsg)) return;
 
-    keys.forEach(function(key) {
+    // Full deletions
+    deleteKeys.forEach(function(key) {
       const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
       driverSet.delete(key);
       driverMap.delete(key);
       if (outer) animateRemove(outer);
       supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
     });
+
+    // Alt phone clears — update driver in place
+    clearAltKeys.forEach(async function(key) {
+      const driver = driverMap.get(key);
+      if (!driver) return;
+      const updated = Object.assign({}, driver, { altPhone: null });
+      driverMap.set(key, updated);
+      try {
+        await saveDriverToFirestore(updated);
+        upsertDriver(updated);
+      } catch(e) { console.error('clearAlt failed', e); }
+    });
+
     window.__retiredKeysToDelete = [];
     applyFilter();
     dupModal.classList.remove('open');
