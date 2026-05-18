@@ -520,13 +520,14 @@ function initApp() {
   // ── SLIC normalisation ────────────────────────────────────────
   const SLIC_ALIASES = {
     'gso': 'Greensboro', 'grenc': 'Greensboro', 'greensboro': 'Greensboro',
-    'meb': 'Mebane',     'mebnc': 'Mebane',     'mebane': 'Mebane'
+    'meb': 'Mebane',     'mebnc': 'Mebane',     'mebane': 'Mebane',
+    'retired': 'Retired'
   };
   function normaliseSlic(raw) {
     if (!raw) return 'Greensboro';
     return SLIC_ALIASES[raw.toLowerCase()] || raw;
   }
-  const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC' };
+  const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC', retired: 'Retired' };
   function slicLabel(loc) {
     return loc ? (SLIC_DISPLAY[loc.toLowerCase()] || loc.toUpperCase()) : '';
   }
@@ -1455,8 +1456,8 @@ function initApp() {
 
     if (noPhone.length === 0) {
       const okEl = document.createElement('p');
-      okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:16px;font-size:13px;';
-      okEl.textContent = '✅ All drivers have at least one phone number.';
+      okEl.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:16px;font-size:13px;line-height:1.6;';
+      okEl.textContent = 'For future use — no drivers without a phone number found.';
       dupResults.appendChild(okEl);
     } else {
       noPhone.sort(function(a, b) {
@@ -1655,6 +1656,12 @@ function initApp() {
   if (dupDeleteAll) dupDeleteAll.addEventListener('click', function() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
+
+    // Show confirmation before deleting
+    const count = keys.length;
+    const confirmMsg = 'Remove ' + count + ' driver' + (count === 1 ? '' : 's') + '? This cannot be undone.';
+    if (!window.confirm(confirmMsg)) return;
+
     keys.forEach(function(key) {
       const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
       driverSet.delete(key);
@@ -1662,6 +1669,7 @@ function initApp() {
       if (outer) animateRemove(outer);
       supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
     });
+    window.__retiredKeysToDelete = [];
     applyFilter();
     dupModal.classList.remove('open');
   });
