@@ -93,7 +93,8 @@
       <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
-        <button id="btnScanDups"  class="btn-admin">🔍 Possibly Retired</button>
+        <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
+        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
         <button id="btnNoPhone"   class="btn-admin">📵 No Phone</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
@@ -123,6 +124,8 @@
             <select id="inputLocation">
               <option value="Greensboro">GRENC</option>
               <option value="Mebane">MEBNC</option>
+              <option value="" disabled>──────────</option>
+              <option value="Retired">🏷 Mark as Retired</option>
             </select>
           </div>
         </div>
@@ -195,14 +198,17 @@
     </div>
 
     <!-- Duplicate Scan Modal -->
+    <!-- List Cleanup Modal -->
     <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
       <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
-        <div class="modal-icon">👴</div>
-        <h2 class="modal-title">Possibly Retired</h2>
-        <div id="dupResults" style="max-height:60vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
-        <div class="modal-actions">
-          <button class="btn-modal-cancel" id="dupClose">Close</button>
-          <button class="btn-delete-confirm" id="dupDeleteAll" style="background:#ca8a04;">Remove Selected</button>
+        <div class="modal-icon">🧹</div>
+        <h2 class="modal-title">List Cleanup</h2>
+        <button id="dupMarkClean" style="display:none;width:100%;margin-bottom:12px;padding:10px;border-radius:10px;border:none;background:#166534;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✅ List is Clean — Reset Baseline</button>
+        <div id="dupResults" style="max-height:50vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
+        <div class="modal-actions" style="flex-wrap:wrap;gap:6px;">
+          <button class="btn-modal-cancel" id="dupClose" style="flex:1;">Close</button>
+          <button class="btn-delete-confirm" id="dupRetireSelected" style="background:#7a6055;display:none;flex:1;">🏷 Retire</button>
+          <button class="btn-delete-confirm" id="dupDeleteSelected" style="background:#b91c1c;display:none;flex:1;">🗑 Delete</button>
         </div>
       </div>
     </div>
