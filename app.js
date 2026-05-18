@@ -1437,6 +1437,7 @@ function initApp() {
 
 
   function openNoPhoneModal() {
+    if (!dupResults || !dupModal) return;
     // Reuse the dup modal but only show the no-phone section
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
@@ -1490,6 +1491,7 @@ function initApp() {
   }
 
   function openDupModal() {
+    if (!dupResults || !dupModal) return;
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
 
