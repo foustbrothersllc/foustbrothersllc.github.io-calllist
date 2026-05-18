@@ -527,8 +527,6 @@ body {
   align-items: center; justify-content: center;
   backdrop-filter: blur(3px);
 }
-/* Delete/confirm modal always sits above other modals */
-#deleteModal { z-index: 1500; }
 .modal-backdrop.open { display: flex; }
 .modal {
   background: var(--white);
@@ -541,7 +539,7 @@ body {
 }
 .modal-icon { font-size: 32px; margin-bottom: 10px; }
 .modal-title { font-size: 18px; font-weight: 800; color: var(--brown); margin-bottom: 8px; }
-.modal-body { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+.modal-body { font-size: 14px; color: #2a1408; margin-bottom: 20px; line-height: 1.5; font-weight: 500; }
 .modal-actions { display: flex; gap: 10px; }
 .btn-modal-cancel {
   flex: 1; padding: 11px;
@@ -644,12 +642,12 @@ body {
   /* Modals */
   .modal { background: #1e1410; }
   .modal-title { color: var(--gold); }
-  .modal-body { color: var(--muted); }
+  .modal-body { color: #f0d090; }
   .btn-modal-cancel { background: #1e1410; color: var(--muted); border-color: #3d2a22; }
 
   /* Import modal */
   #importModal .modal { border-top-color: #f0c060; }
-  #importStatus { color: #c9a86c; }
+  #importStatus { color: #f0d090; font-weight: 600; }
   #importUpdateLog { background: #2a1f18; color: #f0c060; }
   #importLogEntries > div { border-bottom-color: #3d2a22; }
 
