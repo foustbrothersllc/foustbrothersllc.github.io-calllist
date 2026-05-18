@@ -1082,7 +1082,9 @@ function initApp() {
     btnSave.textContent = 'Update Driver';
     inputLastName.value  = driver.lastName;
     inputFirstName.value = driver.firstName;
-    inputLocation.value  = driver.location || 'Greensboro';
+    // Ensure location maps to a valid select option — default to Greensboro
+    const validLocs = ['Greensboro', 'Mebane'];
+    inputLocation.value = validLocs.includes(driver.location) ? driver.location : 'Greensboro';
     inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
     inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
     panelNote.textContent = '';
@@ -1099,7 +1101,7 @@ function initApp() {
           const docId = keyToDocId(key);
           // Write retired record to IDB cache immediately so reload doesn't resurrect them
           cachePut({ id: docId, data: enc });
-          supabase.from('drivers').upsert({ id: docId, data: enc }).then(function(r){ if(r.error) console.error(r.error); });
+          supabase.from('drivers').upsert({ id: docId, data: enc, retired: true }).then(function(r){ if(r.error) console.error(r.error); });
         });
         driverSet.delete(key); driverMap.delete(key);
         const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
@@ -1627,7 +1629,7 @@ function initApp() {
       if (mode === 'retire' && driver) {
         var rd = Object.assign({}, driver, { retired: true, retiredAt: new Date().toISOString() });
         encryptDriver(rd).then(function(enc) {
-          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc }).then(function(r){ if(r.error) console.error(r.error); });
+          supabase.from('drivers').upsert({ id: keyToDocId(key), data: enc, retired: true }).then(function(r){ if(r.error) console.error(r.error); });
         });
       } else {
         supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function(r){ if(r.error) console.error(r.error); });
@@ -1675,8 +1677,10 @@ function initApp() {
     if (error) { alert('Could not load retired drivers: ' + error.message); return; }
     const retiredDrivers = [];
     await Promise.all((allRows || []).map(async function(row) {
+      // Check row-level retired flag first (fast), fall back to decrypted data
+      if (!row.retired) return;
       const d = await decryptDriver(row.data);
-      if (d.retired) retiredDrivers.push(Object.assign({}, d, { _docId: row.id }));
+      retiredDrivers.push(Object.assign({}, d, { _docId: row.id, retired: true }));
     }));
     retiredDrivers.sort(function(a, b) {
       return (a.lastName + a.firstName).toLowerCase() < (b.lastName + b.firstName).toLowerCase() ? -1 : 1;
