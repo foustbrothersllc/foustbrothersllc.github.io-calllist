@@ -1530,7 +1530,6 @@ function initApp() {
         delAltBtn.textContent = 'Delete Alt';
         delAltBtn.style.cssText = 'background:#b91c1c;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;';
         delAltBtn.addEventListener('click', async function() {
-          if (!window.confirm('Remove alt phone for ' + d.lastName + ', ' + d.firstName + '?')) return;
           const updated = Object.assign({}, driverMap.get(key) || d, { altPhone: null });
           driverMap.set(key, updated);
           try {
