@@ -1138,6 +1138,7 @@ function initApp() {
       btnSave.disabled = true;
       btnSave.textContent = 'Saving…';
       upsertDriver(driver);           // update UI immediately
+      applyFilter();                   // re-run filter (e.g. un-retiring a driver makes them visible)
       await saveDriverToFirestore(driver); // then persist to Firestore
       panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
       setTimeout(closePanel, 600);
