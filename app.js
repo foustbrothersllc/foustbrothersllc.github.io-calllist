@@ -464,8 +464,8 @@ function initApp() {
   let editingKey          = null;
   let pendingDeleteKey    = null;
   const selectedKeys      = new Set();
-  // Always display as "Last, First"
-  const nameOrder = 'last';
+  // 'last' = "Smith, John"  |  'first' = "John Smith"
+  let nameOrder = localStorage.getItem('dcl_name_order') || 'last';
 
   // ── Haptic feedback ──────────────────────────────────────────
   // Default ON. Stored as 'off' when disabled so new installs get haptics.
@@ -520,14 +520,13 @@ function initApp() {
   // ── SLIC normalisation ────────────────────────────────────────
   const SLIC_ALIASES = {
     'gso': 'Greensboro', 'grenc': 'Greensboro', 'greensboro': 'Greensboro',
-    'meb': 'Mebane',     'mebnc': 'Mebane',     'mebane': 'Mebane',
-    'retired': 'Retired'
+    'meb': 'Mebane',     'mebnc': 'Mebane',     'mebane': 'Mebane'
   };
   function normaliseSlic(raw) {
     if (!raw) return 'Greensboro';
     return SLIC_ALIASES[raw.toLowerCase()] || raw;
   }
-  const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC', retired: 'Retired' };
+  const SLIC_DISPLAY = { greensboro: 'GRENC', mebane: 'MEBNC' };
   function slicLabel(loc) {
     return loc ? (SLIC_DISPLAY[loc.toLowerCase()] || loc.toUpperCase()) : '';
   }
@@ -1053,8 +1052,7 @@ function initApp() {
     const query = searchBox.value.toLowerCase().trim();
     let visible = 0;
     allCards.forEach(function(outer) {
-      const isRetired = outer.dataset.location === 'retired';
-      const locMatch  = !isRetired && (activeFilter === 'all' || outer.dataset.location === activeFilter);
+      const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
       const textMatch = !query || outer.dataset.search.includes(query);
       const show = locMatch && textMatch;
       outer.style.display = show ? '' : 'none';
@@ -1138,7 +1136,6 @@ function initApp() {
       btnSave.disabled = true;
       btnSave.textContent = 'Saving…';
       upsertDriver(driver);           // update UI immediately
-      applyFilter();                   // re-run filter (e.g. un-retiring a driver makes them visible)
       await saveDriverToFirestore(driver); // then persist to Firestore
       panelNote.textContent = isNew ? '✅ Driver added.' : '✅ Driver updated.';
       setTimeout(closePanel, 600);
@@ -1439,181 +1436,22 @@ function initApp() {
   }
 
 
-  function openNoPhoneModal() {
-    if (!dupResults || !dupModal) return;
-    // Reuse the dup modal but only show the no-phone section
-    dupResults.innerHTML = '';
-    window.__retiredKeysToDelete = [];
-    if(dupDeleteAll)dupDeleteAll.style.display = 'none';
-
-    const noPhone = [];
-    driverMap.forEach(function(d, key) {
-      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
-    });
-
-    const secHeader = document.createElement('p');
-    secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
-    secHeader.textContent = '📵 No Phone Number (' + noPhone.length + ')';
-    dupResults.appendChild(secHeader);
-
-    if (noPhone.length === 0) {
-      const okEl = document.createElement('p');
-      okEl.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:16px;font-size:13px;line-height:1.6;';
-      okEl.textContent = 'For future use — no drivers without a phone number found.';
-      dupResults.appendChild(okEl);
-    } else {
-      noPhone.sort(function(a, b) {
-        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
-        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      noPhone.forEach(function(item) {
-        const d = item.d;
-        const key = item.key;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.accentColor = '#b91c1c';
-        cb.addEventListener('change', function() {
-          if (cb.checked) window.__retiredKeysToDelete.push(key);
-          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
-          if(dupDeleteAll)dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
-        });
-        const label = document.createElement('span');
-        label.style.cssText = 'font-size:13px;color:#ffffff;';
-        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
-        row.appendChild(cb);
-        row.appendChild(label);
-        dupResults.appendChild(row);
-      });
-      if(dupDeleteAll)dupDeleteAll.style.display = noPhone.length > 0 ? 'block' : 'none';
-    }
-
-    // ── Same primary & alt phone ──────────────────────────────
-    const samePhoneDrivers = [];
-    driverMap.forEach(function(d, key) {
-      if (d.phone && d.phone.digits && d.altPhone && d.altPhone.digits &&
-          d.phone.digits === d.altPhone.digits) {
-        samePhoneDrivers.push({ key, d });
-      }
-    });
-    samePhoneDrivers.sort(function(a, b) {
-      const ka = (a.d.lastName + a.d.firstName).toLowerCase();
-      const kb = (b.d.lastName + b.d.firstName).toLowerCase();
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
-
-    const dividerSP = document.createElement('div');
-    dividerSP.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
-    dupResults.appendChild(dividerSP);
-
-    const samePhoneHeader = document.createElement('p');
-    samePhoneHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#fb923c;margin-bottom:6px;';
-    samePhoneHeader.textContent = '🔁 Same Primary & Alt (' + samePhoneDrivers.length + ')';
-    dupResults.appendChild(samePhoneHeader);
-
-    if (samePhoneDrivers.length === 0) {
-      const okSpEl = document.createElement('p');
-      okSpEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:8px;font-size:13px;';
-      okSpEl.textContent = '✅ No drivers with matching primary & alt phone.';
-      dupResults.appendChild(okSpEl);
-    } else {
-      samePhoneDrivers.forEach(function(item) {
-        const d = item.d;
-        const key = item.key;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
-        const label = document.createElement('span');
-        label.style.cssText = 'font-size:13px;color:#fed7aa;flex:1;';
-        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + formatPhone(d.phone.digits);
-        const delAltBtn = document.createElement('button');
-        delAltBtn.textContent = 'Delete Alt';
-        delAltBtn.style.cssText = 'background:#b91c1c;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;';
-        delAltBtn.addEventListener('click', async function() {
-          const updated = Object.assign({}, driverMap.get(key) || d, { altPhone: null });
-          driverMap.set(key, updated);
-          try {
-            await saveDriverToFirestore(updated);
-            upsertDriver(updated);
-            row.style.opacity = '0.4';
-            delAltBtn.textContent = '✅ Done';
-            delAltBtn.disabled = true;
-          } catch(e) {
-            alert('Failed to save: ' + e.message);
-          }
-        });
-        row.appendChild(label);
-        row.appendChild(delAltBtn);
-        dupResults.appendChild(row);
-      });
-    }
-
-    dupModal.classList.add('open');
-  }
-
   function openDupModal() {
-    if (!dupResults || !dupModal) return;
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
 
-    // ── Section 0: Drivers explicitly marked as Retired ───────
-    const retiredDrivers = [];
-    driverMap.forEach(function(d, key) {
-      if ((d.location || '').toLowerCase() === 'retired') retiredDrivers.push({ key, d });
-    });
-    retiredDrivers.sort(function(a, b) {
-      const ka = (a.d.lastName + a.d.firstName).toLowerCase();
-      const kb = (b.d.lastName + b.d.firstName).toLowerCase();
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
-
-    const retiredHeader = document.createElement('p');
-    retiredHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;margin-bottom:6px;';
-    retiredHeader.textContent = '🏁 Retired Drivers (' + retiredDrivers.length + ')';
-    dupResults.appendChild(retiredHeader);
-
-    if (retiredDrivers.length === 0) {
-      const noneEl = document.createElement('p');
-      noneEl.style.cssText = 'color:rgba(255,255,255,0.5);text-align:center;padding:8px;font-size:13px;';
-      noneEl.textContent = 'No drivers marked as Retired.';
-      dupResults.appendChild(noneEl);
-    } else {
-      retiredDrivers.forEach(function(item) {
-        const d = item.d;
-        const key = item.key;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.accentColor = '#b91c1c';
-        cb.addEventListener('change', function() {
-          if (cb.checked) window.__retiredKeysToDelete.push(key);
-          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
-          if (dupDeleteAll) dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
-        });
-        const label = document.createElement('span');
-        const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
-        label.style.cssText = 'font-size:13px;color:#e9d5ff;';
-        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
-        row.appendChild(cb);
-        row.appendChild(label);
-        dupResults.appendChild(row);
-      });
-    }
-
-    const divider0 = document.createElement('div');
-    divider0.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
-    dupResults.appendChild(divider0);
-
-    // ── Section 1: Duplicate PRIMARY phone numbers only ───────
-    // Only flag when the same number is the primary phone for 2+ different drivers
+    // ── Section 1: Duplicate phone numbers ────────────────────
     const phoneMap = new Map(); // digits → [key, ...]
     driverMap.forEach(function(d, key) {
       if (d.phone && d.phone.digits) {
         const arr = phoneMap.get(d.phone.digits) || [];
         arr.push(key);
         phoneMap.set(d.phone.digits, arr);
+      }
+      if (d.altPhone && d.altPhone.digits) {
+        const arr = phoneMap.get(d.altPhone.digits) || [];
+        arr.push(key);
+        phoneMap.set(d.altPhone.digits, arr);
       }
     });
 
@@ -1625,7 +1463,7 @@ function initApp() {
     if (dupPhones.length > 0) {
       const secHeader = document.createElement('p');
       secHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#FFB500;margin-bottom:6px;';
-      secHeader.textContent = '⚠️ Duplicate Primary Numbers (' + dupPhones.length + ')';
+      secHeader.textContent = '⚠️ Duplicate Phone Numbers (' + dupPhones.length + ')';
       dupResults.appendChild(secHeader);
 
       dupPhones.forEach(function(item) {
@@ -1654,14 +1492,12 @@ function initApp() {
     // ── Section 2: Possibly retired (not on last import) ──────
     const meta = JSON.parse(localStorage.getItem('dcl_last_import') || 'null');
     if (!meta) {
-      // Only show the hint message if no explicitly-retired drivers exist
-      if (retiredDrivers.length === 0) {
-        const noImport = document.createElement('p');
-        noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
-        noImport.textContent = 'For Retired Drivers — run an import to also see GRENC drivers not on the last import.';
-        dupResults.appendChild(noImport);
-      }
-      if (dupDeleteAll) dupDeleteAll.style.display = retiredDrivers.length > 0 ? 'block' : 'none';
+      const noImport = document.createElement('p');
+      noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
+      noImport.textContent = 'Run an import to see possibly retired drivers.';
+      dupResults.appendChild(noImport);
+      if (dupPhones.length === 0) dupDeleteAll.style.display = 'none';
+      else dupDeleteAll.style.display = 'none'; // no checkboxes in phone dup section
       dupModal.classList.add('open');
       return;
     }
@@ -1676,7 +1512,7 @@ function initApp() {
 
     const secHeader2 = document.createElement('p');
     secHeader2.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin-bottom:6px;';
-    secHeader2.textContent = 'Retired – GRENC (' + possibly.length + ')';
+    secHeader2.textContent = 'Possibly Retired – GRENC (' + possibly.length + ')';
     dupResults.appendChild(secHeader2);
 
     if (possibly.length === 0) {
@@ -1684,9 +1520,9 @@ function initApp() {
       okEl.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
       okEl.textContent = '✅ All GRENC drivers were on the last import.';
       dupResults.appendChild(okEl);
-      if(dupDeleteAll)dupDeleteAll.style.display = 'none';
+      dupDeleteAll.style.display = 'none';
     } else {
-      if(dupDeleteAll)dupDeleteAll.style.display = 'block';
+      dupDeleteAll.style.display = 'block';
       const impHeader = document.createElement('p');
       impHeader.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:8px;';
       impHeader.textContent = 'Last import: ' + meta.file + ' (' + meta.date + ')';
@@ -1713,101 +1549,22 @@ function initApp() {
         dupResults.appendChild(row);
       });
     }
-    // ── Section 3: No phone number on file ───────────────────────
-    const noPhone = [];
-    driverMap.forEach(function(d, key) {
-      if (!d.phone && !d.altPhone) noPhone.push({ key, d });
-    });
-
-    const divider2 = document.createElement('div');
-    divider2.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
-    dupResults.appendChild(divider2);
-
-    const secHeader3 = document.createElement('p');
-    secHeader3.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f87171;margin-bottom:6px;';
-    secHeader3.textContent = '📵 No Phone Number (' + noPhone.length + ')';
-    dupResults.appendChild(secHeader3);
-
-    if (noPhone.length === 0) {
-      const okEl2 = document.createElement('p');
-      okEl2.style.cssText = 'color:#6ee7a0;text-align:center;padding:10px;font-size:13px;';
-      okEl2.textContent = '✅ All drivers have at least one phone number.';
-      dupResults.appendChild(okEl2);
-    } else {
-      noPhone.sort(function(a, b) {
-        const ka = (a.d.lastName + a.d.firstName).toLowerCase();
-        const kb = (b.d.lastName + b.d.firstName).toLowerCase();
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      noPhone.forEach(function(item) {
-        const d = item.d;
-        const key = item.key;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.accentColor = '#b91c1c';
-        cb.addEventListener('change', function() {
-          if (cb.checked) window.__retiredKeysToDelete.push(key);
-          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
-          if(dupDeleteAll)dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
-        });
-        const label = document.createElement('span');
-        label.style.cssText = 'font-size:13px;color:#ffffff;';
-        label.textContent = d.lastName + ', ' + d.firstName + ' (' + (d.location || 'unknown') + ')';
-        row.appendChild(cb);
-        row.appendChild(label);
-        dupResults.appendChild(row);
-      });
-      if(dupDeleteAll)dupDeleteAll.style.display = 'block';
-    }
-
     dupModal.classList.add('open');
   }
 
-  if (dupClose) dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
-  if (dupDeleteAll) dupDeleteAll.addEventListener('click', function() {
+  dupClose.addEventListener('click', function() { dupModal.classList.remove('open'); });
+  dupDeleteAll.addEventListener('click', function() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
-
-    // ── Ask which location to move them to ──
-    const backdrop = document.createElement('div');
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1a0f0a;border-radius:18px;padding:28px 24px 22px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.4);text-align:center;border-top:4px solid #a78bfa;';
-    const count = keys.length;
-    box.innerHTML = '<div style="font-size:28px;margin-bottom:10px;">📋</div>'
-      + '<h2 style="font-size:17px;font-weight:800;color:#e9d5ff;margin-bottom:8px;">Move ' + count + ' Driver' + (count !== 1 ? 's' : '') + ' To</h2>'
-      + '<p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:20px;">Choose the location to restore ' + (count !== 1 ? 'these drivers' : 'this driver') + ' to.</p>'
-      + '<div style="display:flex;flex-direction:column;gap:10px;">'
-      + '<button id="moveToGrenc" style="padding:13px;border-radius:12px;border:none;background:#351C15;color:#FFB500;font-size:15px;font-weight:800;cursor:pointer;">GRENC — Greensboro</button>'
-      + '<button id="moveToMebnc" style="padding:13px;border-radius:12px;border:none;background:#351C15;color:#FFB500;font-size:15px;font-weight:800;cursor:pointer;">MEBNC — Mebane</button>'
-      + '<button id="moveCancelBtn" style="padding:11px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>'
-      + '</div>';
-    backdrop.appendChild(box);
-    document.body.appendChild(backdrop);
-
-    function doMove(location) {
-      backdrop.remove();
-      keys.forEach(async function(key) {
-        const driver = driverMap.get(key);
-        if (!driver) return;
-        const updated = Object.assign({}, driver, { location: location, updatedAt: new Date().toLocaleString() });
-        driverMap.set(key, updated);
-        try {
-          await saveDriverToFirestore(updated);
-          upsertDriver(updated);
-        } catch(e) { console.error('move from retired failed', e); }
-      });
-      window.__retiredKeysToDelete = [];
-      applyFilter();
-      dupModal.classList.remove('open');
-    }
-
-    box.querySelector('#moveToGrenc').addEventListener('click', function() { doMove('Greensboro'); });
-    box.querySelector('#moveToMebnc').addEventListener('click', function() { doMove('Mebane'); });
-    box.querySelector('#moveCancelBtn').addEventListener('click', function() { backdrop.remove(); });
-    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
+    keys.forEach(function(key) {
+      const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
+      driverSet.delete(key);
+      driverMap.delete(key);
+      if (outer) animateRemove(outer);
+      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
+    });
+    applyFilter();
+    dupModal.classList.remove('open');
   });
 
   // ── Export JSON ───────────────────────────────────────────────
@@ -1942,57 +1699,68 @@ function initApp() {
   }
   function closeImportModal() { importModal.classList.remove('open'); }
 
-  // ── Convert file to plain text for Groq Edge Function ────────
-  async function prepareFileForAI(file) {
-    const name = file.name.toLowerCase();
+  // ── Parse Excel file into raw rows for AI ────────────────────
+  async function parseExcelToRows(file) {
+    const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.mjs');
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const allRows = [];
+    wb.SheetNames.forEach(function(sheetName) {
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Find first row that looks like a header or data (skip totally empty rows)
+      const meaningful = rows.filter(r => r.some(c => String(c).trim().length > 0));
+      if (meaningful.length > 0) {
+        allRows.push({ sheet: sheetName, rows: meaningful });
+      }
+    });
+    return allRows;
+  }
 
-    if (name.endsWith('.pdf')) {
-      // Extract text from PDF using pdf.js, then send as plain text
-      const items = await extractTextFromPdf(file);
-      // Reconstruct readable text from position-aware items
-      const lines = [];
-      let currentY = null;
-      let currentLine = [];
-      items.forEach(function(item) {
-        if (!item.str) return;
-        const y = Math.round(item.y);
-        if (currentY === null) currentY = y;
-        if (Math.abs(y - currentY) > 6) {
-          if (currentLine.length) lines.push(currentLine.join(' '));
-          currentLine = [];
-          currentY = y;
-        }
-        currentLine.push(item.str);
-      });
-      if (currentLine.length) lines.push(currentLine.join(' '));
-      return { fileContent: lines.join('\n') };
+  // ── Send raw rows to Supabase Edge Function (Groq) ───────────
+  async function normaliseWithAI(sheetsData, fileName) {
+    const SUPABASE_URL  = supabase.supabaseUrl || 'https://lywhuzkgahhzhgjdgbnx.supabase.co';
+    const SUPABASE_KEY  = supabase.supabaseKey  || SUPABASE_ANON_KEY;
+
+    const payload = {
+      fileName,
+      sheets: sheetsData.map(s => ({
+        sheet: s.sheet,
+        // Send max 500 rows per sheet to keep payload small
+        rows: s.rows.slice(0, 500)
+      }))
+    };
+
+    const res = await fetch(SUPABASE_URL + '/functions/v1/ai-import', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error('AI import failed (' + res.status + '): ' + errText);
     }
 
-    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      // Convert Excel to CSV text using SheetJS
-      const buffer = await file.arrayBuffer();
-      const wb     = XLSX.read(buffer, { type: 'array' });
-      // Prefer 'Sheet1' if it exists, otherwise use the first sheet
-      const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
-      const ws     = wb.Sheets[sheetName];
-      const csv    = XLSX.utils.sheet_to_csv(ws);
-      return { fileContent: csv };
-    }
-
-    if (name.endsWith('.json')) {
-      // Legacy JSON — skip AI, parse directly
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if (!Array.isArray(data)) throw new Error('JSON file must be an array.');
-      return { fileType: 'json', fileContent: null, drivers: data };
-    }
-
-    throw new Error('Unsupported file type. Use PDF, Excel (.xlsx), or JSON.');
+    const data = await res.json();
+    if (!Array.isArray(data.drivers)) throw new Error('Unexpected response from AI import service.');
+    return data.drivers;
   }
 
   async function runImport() {
     const file = importFileInput.files[0];
-    if (!file) { importStatus.textContent = '⚠️ Please choose a PDF, Excel, or JSON file first.'; return; }
+    if (!file) { importStatus.textContent = '⚠️ Please choose an Excel (.xls/.xlsx) or JSON file.'; return; }
+
+    const fileName    = file.name.toLowerCase();
+    const isExcel     = fileName.endsWith('.xls') || fileName.endsWith('.xlsx') || fileName.endsWith('.xlsm');
+    const isJSON      = fileName.endsWith('.json');
+    if (!isExcel && !isJSON) {
+      importStatus.textContent = '⚠️ Please choose an Excel (.xls/.xlsx) or JSON file.';
+      return;
+    }
 
     importConfirm.disabled = true;
     importConfirm.textContent = 'Analyzing…';
@@ -2001,49 +1769,56 @@ function initApp() {
 
     let newDrivers;
     try {
-      const prepared = await prepareFileForAI(file);
-
-      if (prepared.fileType === 'json') {
-        // Legacy path — no AI needed
-        newDrivers = prepared.drivers.map(d => ({ ...d, location: normaliseSlic(d.location) }));
-        setProgress(35, 'JSON parsed…');
-      } else {
-        // ── Send to Supabase Edge Function → Gemini ──────────
-        importStatus.textContent = '🤖 AI is reading your file…';
-        setProgress(20, 'Sending to AI…');
-
-        const { data: fnData, error: fnError } = await supabase.functions.invoke('ai-import', {
-          body: { fileContent: prepared.fileContent },
-          headers: { Authorization: 'Bearer ' + SUPABASE_KEY },
-        });
-
-        if (fnError) throw new Error('AI processing failed: ' + fnError.message);
-        if (fnData.error) throw new Error('AI error: ' + fnData.error);
-        if (!fnData.drivers || fnData.drivers.length === 0) {
-          throw new Error('AI found no driver records in the file. Check the file has driver data.');
+      if (isJSON) {
+        // JSON: must already be in driver format or close to it — still send to AI to normalise
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) throw new Error('JSON file must be an array of records.');
+        // If it already has firstName/lastName/phone in the right shape, use directly
+        const looksNormalised = parsed[0] && (parsed[0].firstName || parsed[0].lastName);
+        if (looksNormalised) {
+          newDrivers = parsed.map(d => ({ ...d, location: normaliseSlic(d.location || 'Greensboro') }));
+        } else {
+          // Send raw JSON rows to AI for normalisation
+          setProgress(20, 'Sending to AI for normalisation…');
+          importStatus.textContent = 'Reading JSON structure…';
+          const sheetsData = [{ sheet: 'data', rows: parsed.map(r => Object.values(r)) }];
+          setProgress(35, 'AI is mapping fields…');
+          importStatus.textContent = 'AI is normalising records…';
+          newDrivers = await normaliseWithAI(sheetsData, file.name);
         }
-
-        setProgress(35, 'AI found ' + fnData.drivers.length + ' drivers…');
-        importStatus.textContent = '✅ AI found ' + fnData.drivers.length + ' drivers — reviewing…';
-
-        // Normalise location values and phone objects
-        newDrivers = fnData.drivers.map(function(d) {
-          function cleanPhone(p) {
-            if (!p || !p.digits) return null;
-            const digits = normalisePhone(p.digits);
-            return digits ? { digits, display: formatPhone(digits) } : null;
-          }
-          return {
-            lastName:  (d.lastName  || '').trim(),
-            firstName: (d.firstName || '').trim(),
-            location:  normaliseSlic(d.location || 'Greensboro'),
-            phone:     cleanPhone(d.phone),
-            altPhone:  cleanPhone(d.altPhone),
-          };
-        }).filter(function(d) { return d.lastName && d.firstName; });
-
-        if (newDrivers.length === 0) throw new Error('No valid driver records after processing.');
+      } else {
+        // Excel: parse with SheetJS then send rows to AI
+        setProgress(15, 'Reading spreadsheet…');
+        importStatus.textContent = 'Parsing Excel file…';
+        const sheetsData = await parseExcelToRows(file);
+        if (sheetsData.length === 0 || sheetsData.every(s => s.rows.length === 0)) {
+          throw new Error('No data found in spreadsheet.');
+        }
+        setProgress(35, 'Sending to AI for normalisation…');
+        importStatus.textContent = 'AI is reading ' + sheetsData.reduce((n,s) => n + s.rows.length, 0) + ' rows…';
+        newDrivers = await normaliseWithAI(sheetsData, file.name);
       }
+
+      if (!newDrivers || newDrivers.length === 0) throw new Error('No driver records found. Check the file format.');
+      // Ensure phones are in the right shape
+      newDrivers = newDrivers.map(function(d) {
+        function makePhone(val) {
+          if (!val) return null;
+          if (typeof val === 'object' && val.digits) return val;
+          const digits = normalisePhone(String(val));
+          return digits ? { digits, display: formatPhone(digits) } : null;
+        }
+        return {
+          firstName: toTitleCase(String(d.firstName || '').trim()),
+          lastName:  toTitleCase(String(d.lastName  || '').trim()),
+          location:  normaliseSlic(d.location || 'Greensboro'),
+          phone:     makePhone(d.phone),
+          altPhone:  makePhone(d.altPhone),
+          photo:     null
+        };
+      }).filter(d => d.firstName && d.lastName);
+
     } catch(e) {
       importStatus.textContent = '❌ ' + e.message;
       importConfirm.disabled = false;
@@ -2207,9 +1982,9 @@ function initApp() {
     }
   }
 
-  if (importCancel) importCancel.addEventListener('click', closeImportModal);
-  if (importConfirm) importConfirm.addEventListener('click', function() { runImport().catch(function(e) { if (e && e.message !== 'cancelled') console.error(e); }); });
-  if (importModal) importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
+  importCancel.addEventListener('click', closeImportModal);
+  importConfirm.addEventListener('click', function() { runImport().catch(function(e) { if (e && e.message !== 'cancelled') console.error(e); }); });
+  importModal.addEventListener('click', function(e) { if (e.target === importModal) closeImportModal(); });
 
   // ── Event listeners ──────────────────────────────────────────
   const searchClearBtn = document.getElementById('searchClear');
@@ -2218,8 +1993,8 @@ function initApp() {
     if (searchClearBtn) searchClearBtn.style.display = searchBox.value ? 'block' : 'none';
   }
 
-  if (searchBox) searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
-  if (searchBox) searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
+  searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
+  searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
 
   if (searchClearBtn) {
     searchClearBtn.addEventListener('click', function() {
@@ -2244,24 +2019,70 @@ function initApp() {
       applyFilter();
     });
   });
+  // (name order toggle moved to Settings modal)
+  fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
+  panelClose.addEventListener('click', closePanel);
+  btnCancel.addEventListener('click', closePanel);
+  panelOverlay.addEventListener('click', closePanel);
+  btnSave.addEventListener('click', saveDriver);
 
-  if (fabAdd) fabAdd.addEventListener('click', function() { haptic('light'); openAddPanel(); });
-  if (panelClose) panelClose.addEventListener('click', closePanel);
-  if (btnCancel) btnCancel.addEventListener('click', closePanel);
-  if (panelOverlay) panelOverlay.addEventListener('click', closePanel);
-  if (btnSave) btnSave.addEventListener('click', saveDriver);
+  // ── Settings modal ───────────────────────────────────────────
+  (function initSettings() {
+    const settingsModal   = document.getElementById('settingsModal');
+    const settingsClose   = document.getElementById('settingsClose');
+    const settingsNameSub = document.getElementById('settingsNameSub');
+    const settingsNameToggle = document.getElementById('settingsNameToggle');
+    const hapticToggle    = document.getElementById('settingsHapticToggle');
 
-  function safeListener(id, fn) {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('click', fn);
-  }
-  safeListener('btnAdminLogin', promptAdminLogin);
-  safeListener('btnAdminLogoutHeader', adminLogout);
-  safeListener('btnSeedDb', manualSeed);
-  safeListener('btnImport', openImportModal);
-  safeListener('btnScanDups', openDupModal);
-  safeListener('btnNoPhone', openNoPhoneModal);
-  safeListener('btnExport', exportJson);
+    function updateNameSub() {
+      settingsNameSub.textContent = nameOrder === 'last' ? 'Last, First (e.g. Smith, John)' : 'First Last (e.g. John Smith)';
+    }
+    function updateHapticToggle() {
+      hapticToggle.textContent = hapticEnabled ? 'On' : 'Off';
+      hapticToggle.style.background = hapticEnabled ? '#FFB500' : 'rgba(255,255,255,0.15)';
+      hapticToggle.style.color = hapticEnabled ? '#1e0f0b' : '#fff';
+    }
+
+    document.getElementById('btnSettings').addEventListener('click', function() {
+      haptic('light');
+      updateNameSub();
+      updateHapticToggle();
+      settingsModal.classList.add('open');
+    });
+
+    settingsClose.addEventListener('click', function() { settingsModal.classList.remove('open'); });
+    settingsModal.addEventListener('click', function(e) { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+
+    settingsNameToggle.addEventListener('click', function() {
+      haptic('light');
+      nameOrder = nameOrder === 'last' ? 'first' : 'last';
+      localStorage.setItem('dcl_name_order', nameOrder);
+      updateNameSub();
+
+      // Re-sort the driver list and re-render — simpler and bulletproof
+      const drivers = Array.from(driverMap.values());
+      drivers.sort(function(a, b) {
+        const ka = nameOrder === 'first' ? (a.firstName + a.lastName).toLowerCase() : (a.lastName + a.firstName).toLowerCase();
+        const kb = nameOrder === 'first' ? (b.firstName + b.lastName).toLowerCase() : (b.lastName + b.firstName).toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      renderCards(drivers);
+    });
+
+    hapticToggle.addEventListener('click', function() {
+      hapticEnabled = !hapticEnabled;
+      localStorage.setItem('dcl_haptic', hapticEnabled ? 'on' : 'off');
+      haptic('light'); // one last buzz if turning on
+      updateHapticToggle();
+    });
+  })();
+
+  document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
+  document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
+  document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
+  document.getElementById('btnImport').addEventListener('click', openImportModal);
+  document.getElementById('btnScanDups').addEventListener('click', openDupModal);
+  document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────
   if (localStorage.getItem('dcl_admin') === '1') {
