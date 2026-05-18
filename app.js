@@ -1770,21 +1770,44 @@ function initApp() {
     const keys = window.__retiredKeysToDelete || [];
     if (keys.length === 0) { dupModal.classList.remove('open'); return; }
 
+    // ── Ask which location to move them to ──
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(3px);';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#1a0f0a;border-radius:18px;padding:28px 24px 22px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.4);text-align:center;border-top:4px solid #a78bfa;';
     const count = keys.length;
-    const confirmMsg = 'Remove ' + count + ' driver' + (count === 1 ? '' : 's') + '? This cannot be undone.';
-    if (!window.confirm(confirmMsg)) return;
+    box.innerHTML = '<div style="font-size:28px;margin-bottom:10px;">📋</div>'
+      + '<h2 style="font-size:17px;font-weight:800;color:#e9d5ff;margin-bottom:8px;">Move ' + count + ' Driver' + (count !== 1 ? 's' : '') + ' To</h2>'
+      + '<p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:20px;">Choose the location to restore ' + (count !== 1 ? 'these drivers' : 'this driver') + ' to.</p>'
+      + '<div style="display:flex;flex-direction:column;gap:10px;">'
+      + '<button id="moveToGrenc" style="padding:13px;border-radius:12px;border:none;background:#351C15;color:#FFB500;font-size:15px;font-weight:800;cursor:pointer;">GRENC — Greensboro</button>'
+      + '<button id="moveToMebnc" style="padding:13px;border-radius:12px;border:none;background:#351C15;color:#FFB500;font-size:15px;font-weight:800;cursor:pointer;">MEBNC — Mebane</button>'
+      + '<button id="moveCancelBtn" style="padding:11px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>'
+      + '</div>';
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
 
-    keys.forEach(function(key) {
-      const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
-      driverSet.delete(key);
-      driverMap.delete(key);
-      if (outer) animateRemove(outer);
-      supabase.from('drivers').delete().eq('id', keyToDocId(key)).then(function({error}){ if(error) console.error(error); });
-    });
+    function doMove(location) {
+      backdrop.remove();
+      keys.forEach(async function(key) {
+        const driver = driverMap.get(key);
+        if (!driver) return;
+        const updated = Object.assign({}, driver, { location: location, updatedAt: new Date().toLocaleString() });
+        driverMap.set(key, updated);
+        try {
+          await saveDriverToFirestore(updated);
+          upsertDriver(updated);
+        } catch(e) { console.error('move from retired failed', e); }
+      });
+      window.__retiredKeysToDelete = [];
+      applyFilter();
+      dupModal.classList.remove('open');
+    }
 
-    window.__retiredKeysToDelete = [];
-    applyFilter();
-    dupModal.classList.remove('open');
+    box.querySelector('#moveToGrenc').addEventListener('click', function() { doMove('Greensboro'); });
+    box.querySelector('#moveToMebnc').addEventListener('click', function() { doMove('Mebane'); });
+    box.querySelector('#moveCancelBtn').addEventListener('click', function() { backdrop.remove(); });
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
   });
 
   // ── Export JSON ───────────────────────────────────────────────
