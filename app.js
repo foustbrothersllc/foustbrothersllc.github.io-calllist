@@ -1497,6 +1497,55 @@ function initApp() {
     dupResults.innerHTML = '';
     window.__retiredKeysToDelete = [];
 
+    // ── Section 0: Drivers explicitly marked as Retired ───────
+    const retiredDrivers = [];
+    driverMap.forEach(function(d, key) {
+      if ((d.location || '').toLowerCase() === 'retired') retiredDrivers.push({ key, d });
+    });
+    retiredDrivers.sort(function(a, b) {
+      const ka = (a.d.lastName + a.d.firstName).toLowerCase();
+      const kb = (b.d.lastName + b.d.firstName).toLowerCase();
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+
+    const retiredHeader = document.createElement('p');
+    retiredHeader.style.cssText = 'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;margin-bottom:6px;';
+    retiredHeader.textContent = '🏁 Retired Drivers (' + retiredDrivers.length + ')';
+    dupResults.appendChild(retiredHeader);
+
+    if (retiredDrivers.length === 0) {
+      const noneEl = document.createElement('p');
+      noneEl.style.cssText = 'color:rgba(255,255,255,0.5);text-align:center;padding:8px;font-size:13px;';
+      noneEl.textContent = 'No drivers marked as Retired.';
+      dupResults.appendChild(noneEl);
+    } else {
+      retiredDrivers.forEach(function(item) {
+        const d = item.d;
+        const key = item.key;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.15);';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.accentColor = '#b91c1c';
+        cb.addEventListener('change', function() {
+          if (cb.checked) window.__retiredKeysToDelete.push(key);
+          else window.__retiredKeysToDelete = window.__retiredKeysToDelete.filter(k => k !== key);
+          if (dupDeleteAll) dupDeleteAll.style.display = window.__retiredKeysToDelete.length > 0 ? 'block' : 'none';
+        });
+        const label = document.createElement('span');
+        const phone = d.phone ? formatPhone(d.phone.digits) : 'no phone';
+        label.style.cssText = 'font-size:13px;color:#e9d5ff;';
+        label.textContent = d.lastName + ', ' + d.firstName + ' — ' + phone;
+        row.appendChild(cb);
+        row.appendChild(label);
+        dupResults.appendChild(row);
+      });
+    }
+
+    const divider0 = document.createElement('div');
+    divider0.style.cssText = 'border-top:1px solid rgba(255,255,255,0.2);margin:10px 0;';
+    dupResults.appendChild(divider0);
+
     // ── Section 1: Duplicate PRIMARY phone numbers only ───────
     // Only flag when the same number is the primary phone for 2+ different drivers
     const phoneMap = new Map(); // digits → [key, ...]
@@ -1547,7 +1596,7 @@ function initApp() {
     if (!meta) {
       const noImport = document.createElement('p');
       noImport.style.cssText = 'color:rgba(255,255,255,0.6);text-align:center;padding:12px;font-size:13px;';
-      noImport.textContent = 'Run an import to see retired drivers not on the last import.';
+      noImport.textContent = 'For Retired Drivers — run an import to also see GRENC drivers not on the last import.';
       dupResults.appendChild(noImport);
       if (dupDeleteAll) dupDeleteAll.style.display = 'none';
       dupModal.classList.add('open');
