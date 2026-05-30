@@ -2,11 +2,10 @@
    Driver Call List — sw.js
    ============================================================ */
 const CACHE_VERSION = 'v' + (function() {
-  return '20250529-02';   // ← force-wipes old broken cache
+  return '20250529-03';  // bumped to force-clear the broken cache from 20250529-01/02
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
 
-// ── App shell: everything needed to render the UI with zero network ──
 const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/',
   'https://foustbrothersllc.github.io/callist/index.html',
@@ -15,18 +14,17 @@ const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/manifest.json',
   'https://foustbrothersllc.github.io/callist/apple-touch-icon.png',
   'https://foustbrothersllc.github.io/callist/favicon.ico',
-  // SheetJS — needed for Excel import; cache it so import works offline too
+  // SheetJS — now cached so Excel import works offline
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
 ];
 
-// ── Install: pre-cache the entire app shell ───────────────────
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
       return Promise.allSettled(
         APP_SHELL.map(function(url) {
           return cache.add(url).catch(function(err) {
-            console.warn('SW: could not pre-cache', url, err);
+            console.warn('SW: could not cache', url, err);
           });
         })
       );
@@ -36,7 +34,6 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// ── Activate: remove old cache versions ──────────────────────
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
@@ -50,22 +47,19 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// ── Fetch handler ─────────────────────────────────────────────
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Supabase or esm.sh — data must always come live or fail gracefully
+  // Never intercept Supabase or esm.sh — must always go to network
   if (url.includes('supabase.co') || url.includes('esm.sh')) {
     return;
   }
 
-  // CDN assets (SheetJS, etc.) — cache first, network fallback
-  // These never change for a given version URL, so cache is always safe
+  // CDN assets (SheetJS etc.) — cache first, they're versioned and never change
   if (url.includes('cdnjs.cloudflare.com') || url.includes('gstatic.com')) {
     event.respondWith(
       caches.match(event.request).then(function(cached) {
         if (cached) return cached;
-        // Not in cache yet — fetch, store, return
         return fetch(event.request).then(function(response) {
           if (response && response.status === 200) {
             const clone = response.clone();
@@ -80,12 +74,11 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Navigation requests — cache first for instant load, refresh in background
+  // Navigation — cache first for instant load, refresh in background
   if (event.request.mode === 'navigate') {
     event.respondWith(
       caches.match('https://foustbrothersllc.github.io/callist/index.html')
         .then(function(cached) {
-          // Kick off a background network fetch to keep the cache fresh
           const networkFetch = fetch(event.request).then(function(response) {
             if (response && response.status === 200) {
               caches.open(CACHE_NAME).then(function(cache) {
@@ -93,37 +86,32 @@ self.addEventListener('fetch', function(event) {
               });
             }
             return response;
-          }).catch(function() { /* offline — cached version already returned */ });
-
-          // Serve cache immediately; only wait for network if nothing cached
+          }).catch(function() {});
           return cached || networkFetch;
         })
     );
     return;
   }
 
-  // All other app assets (app.js, styles.css, icons, etc.)
-  // Strip iOS pull-to-refresh cache-bust param before matching
+  // All other app assets — network first, cache fallback (original safe strategy)
   const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
   const cleanRequest = cleanUrl !== url
     ? new Request(cleanUrl, { mode: 'same-origin' })
     : event.request;
 
-  // Cache first → background refresh (stale-while-revalidate)
-  // This means the app always loads from cache instantly, then quietly updates
   event.respondWith(
-    caches.match(cleanRequest).then(function(cached) {
-      const networkFetch = fetch(event.request).then(function(response) {
+    fetch(event.request)
+      .then(function(response) {
         if (response && response.status === 200 && response.type !== 'opaque') {
+          const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(cleanRequest, response.clone());
+            cache.put(cleanRequest, clone);
           });
         }
         return response;
-      }).catch(function() { return null; });
-
-      // Return cache immediately; if nothing cached, wait for network
-      return cached || networkFetch;
-    })
+      })
+      .catch(function() {
+        return caches.match(cleanRequest);
+      })
   );
 });
