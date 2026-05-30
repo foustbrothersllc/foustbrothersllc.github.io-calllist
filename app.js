@@ -672,8 +672,8 @@ function initApp() {
     });
     box.appendChild(copyBtn);
 
-    // Save to Contacts — mobile only (iOS + Android)
-    if (detectPlatform() !== 'desktop' && driver && driver.phone) {
+    // Save to Contacts — all platforms
+    if (driver && driver.phone) {
       const saveBtn = document.createElement('button');
       saveBtn.style.cssText = [
         'display:flex;align-items:center;justify-content:center;gap:10px;',
