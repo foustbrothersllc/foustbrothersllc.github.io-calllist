@@ -563,8 +563,44 @@ function initApp() {
     return s;
   }
 
+  // ── Platform detection ───────────────────────────────────────
+  function detectPlatform() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'ios';
+    if (/android/i.test(ua)) return 'android';
+    return 'desktop';
+  }
+
+  // ── Save to Contacts via vCard download ──────────────────────
+  function saveToContacts(driver) {
+    const firstName = driver.firstName || '';
+    const lastName  = driver.lastName  || '';
+    const digits    = driver.phone ? driver.phone.digits : null;
+    if (!digits) return;
+
+    const loc = (driver.location || '').toLowerCase();
+    const org = loc === 'mebane' ? 'Mebane Feeder Driver' : 'UPS Feeder Driver';
+
+    let vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\n';
+    vcard += 'N:' + lastName + ';' + firstName + ';;;\r\n';
+    vcard += 'FN:' + firstName + ' ' + lastName + '\r\n';
+    vcard += 'ORG:' + org + '\r\n';
+    vcard += 'TEL;TYPE=CELL:+1' + digits + '\r\n';
+    vcard += 'END:VCARD\r\n';
+
+    const blob = new Blob([vcard], { type: 'text/vcard' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = firstName + '_' + lastName + '.vcf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  }
+
   // ── Phone action sheet (tap on primary number) ──────────────
-  function showPhoneActionSheet(digits) {
+  function showPhoneActionSheet(digits, driver) {
     const existing = document.getElementById('phoneActionSheet');
     if (existing) existing.remove();
 
@@ -636,6 +672,23 @@ function initApp() {
     });
     box.appendChild(copyBtn);
 
+    // Save to Contacts — mobile only (iOS + Android)
+    if (detectPlatform() !== 'desktop' && driver && driver.phone) {
+      const saveBtn = document.createElement('button');
+      saveBtn.style.cssText = [
+        'display:flex;align-items:center;justify-content:center;gap:10px;',
+        'padding:14px;border-radius:12px;background:#f5ede8;color:#351C15;',
+        'font-size:16px;font-weight:700;border:1.5px solid #e5d5cc;cursor:pointer;',
+      ].join('');
+      saveBtn.innerHTML = '👤 Save to Contacts';
+      saveBtn.addEventListener('click', function() {
+        haptic('light');
+        saveToContacts(driver);
+        sheet.remove();
+      });
+      box.appendChild(saveBtn);
+    }
+
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
     cancelBtn.style.cssText = [
@@ -651,7 +704,7 @@ function initApp() {
   }
 
   // ── Phone group: plain text for primary, call-only for alt ──
-  function makePhoneGroup(digits, isPrimary) {
+  function makePhoneGroup(digits, isPrimary, driver) {
     const wrap = document.createElement('div');
     wrap.className = 'phone-group';
 
@@ -664,7 +717,7 @@ function initApp() {
       numBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         haptic('light');
-        showPhoneActionSheet(digits);
+        showPhoneActionSheet(digits, driver);
       });
       wrap.appendChild(numBtn);
     } else {
@@ -734,8 +787,8 @@ function initApp() {
     if (driver.phone || driver.altPhone) {
       const phones = document.createElement('div');
       phones.className = 'phones';
-      if (driver.phone && driver.phone.digits)         phones.appendChild(makePhoneGroup(driver.phone.digits, true));
-      if (driver.altPhone && driver.altPhone.digits)   phones.appendChild(makePhoneGroup(driver.altPhone.digits, false));
+      if (driver.phone && driver.phone.digits)         phones.appendChild(makePhoneGroup(driver.phone.digits, true, driver));
+      if (driver.altPhone && driver.altPhone.digits)   phones.appendChild(makePhoneGroup(driver.altPhone.digits, false, driver));
       card.appendChild(phones);
     } else {
       const none = document.createElement('div');
