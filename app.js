@@ -2478,7 +2478,15 @@ function initApp() {
     });
 
     // ── Step 2: fetch fresh data from Supabase in background ────
-    supabase.from('drivers').select('id, data')
+    // Wrapped in a 10-second timeout — on no/low signal the fetch hangs
+    // forever without this. Cached drivers from Step 1 are already visible
+    // if it times out; user can pull-to-refresh when signal returns.
+    Promise.race([
+      supabase.from('drivers').select('id, data'),
+      new Promise(function(_, reject) {
+        setTimeout(function() { reject(new Error('timeout')); }, 10000);
+      })
+    ])
       .then(async function({ data, error }) {
         if (error) {
           showOfflineBanner();
@@ -2519,6 +2527,11 @@ function initApp() {
         await cachePutAll(data || []);
         firstSnapshot = false;
         renderCards(drivers);
+      })
+      .catch(function() {
+        // Timeout or network failure — cached drivers already visible from Step 1
+        showOfflineBanner();
+        removeLoadingMsg();
       });
 
     // ── Step 3: real-time delta updates ─────────────────────────
