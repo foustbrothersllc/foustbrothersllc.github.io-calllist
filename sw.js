@@ -2,7 +2,7 @@
    Driver Call List — sw.js
    ============================================================ */
 const CACHE_VERSION = 'v' + (function() {
-  return '20250529-01';   // ← bumped so the new SW installs immediately
+  return '20250529-02';   // ← force-wipes old broken cache
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
 
