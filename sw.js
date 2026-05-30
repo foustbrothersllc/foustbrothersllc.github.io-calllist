@@ -2,9 +2,11 @@
    Driver Call List — sw.js
    ============================================================ */
 const CACHE_VERSION = 'v' + (function() {
-  return '20250517-19';
+  return '20250529-01';   // ← bumped so the new SW installs immediately
 })();
 const CACHE_NAME = 'driver-call-list-' + CACHE_VERSION;
+
+// ── App shell: everything needed to render the UI with zero network ──
 const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/',
   'https://foustbrothersllc.github.io/callist/index.html',
@@ -13,15 +15,18 @@ const APP_SHELL = [
   'https://foustbrothersllc.github.io/callist/manifest.json',
   'https://foustbrothersllc.github.io/callist/apple-touch-icon.png',
   'https://foustbrothersllc.github.io/callist/favicon.ico',
+  // SheetJS — needed for Excel import; cache it so import works offline too
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
 ];
 
+// ── Install: pre-cache the entire app shell ───────────────────
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
       return Promise.allSettled(
         APP_SHELL.map(function(url) {
           return cache.add(url).catch(function(err) {
-            console.warn('SW: could not cache', url, err);
+            console.warn('SW: could not pre-cache', url, err);
           });
         })
       );
@@ -31,6 +36,7 @@ self.addEventListener('install', function(event) {
   );
 });
 
+// ── Activate: remove old cache versions ──────────────────────
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
@@ -44,18 +50,37 @@ self.addEventListener('activate', function(event) {
   );
 });
 
+// ── Fetch handler ─────────────────────────────────────────────
 self.addEventListener('fetch', function(event) {
   const url = event.request.url;
 
-  // Never intercept Supabase, esm.sh, or CDN requests
-  if (url.includes('supabase.co') ||
-      url.includes('esm.sh') ||
-      url.includes('cdnjs.cloudflare.com') ||
-      url.includes('gstatic.com')) {
+  // Never intercept Supabase or esm.sh — data must always come live or fail gracefully
+  if (url.includes('supabase.co') || url.includes('esm.sh')) {
     return;
   }
 
-  // Navigation requests — cache first (instant offline), then network
+  // CDN assets (SheetJS, etc.) — cache first, network fallback
+  // These never change for a given version URL, so cache is always safe
+  if (url.includes('cdnjs.cloudflare.com') || url.includes('gstatic.com')) {
+    event.respondWith(
+      caches.match(event.request).then(function(cached) {
+        if (cached) return cached;
+        // Not in cache yet — fetch, store, return
+        return fetch(event.request).then(function(response) {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(function(cache) {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Navigation requests — cache first for instant load, refresh in background
   if (event.request.mode === 'navigate') {
     event.respondWith(
       caches.match('https://foustbrothersllc.github.io/callist/index.html')
@@ -68,35 +93,37 @@ self.addEventListener('fetch', function(event) {
               });
             }
             return response;
-          }).catch(function() { /* offline — cache already returned */ });
+          }).catch(function() { /* offline — cached version already returned */ });
 
-          // Return cache immediately if we have it; otherwise wait for network
+          // Serve cache immediately; only wait for network if nothing cached
           return cached || networkFetch;
         })
     );
     return;
   }
 
-  // Strip iOS pull-to-refresh cache-bust param
+  // All other app assets (app.js, styles.css, icons, etc.)
+  // Strip iOS pull-to-refresh cache-bust param before matching
   const cleanUrl = url.replace(/[?&]r=\d+/, '').replace(/[?&]$/, '');
   const cleanRequest = cleanUrl !== url
     ? new Request(cleanUrl, { mode: 'same-origin' })
     : event.request;
 
-  // Network first, cache fallback
+  // Cache first → background refresh (stale-while-revalidate)
+  // This means the app always loads from cache instantly, then quietly updates
   event.respondWith(
-    fetch(event.request)
-      .then(function(response) {
+    caches.match(cleanRequest).then(function(cached) {
+      const networkFetch = fetch(event.request).then(function(response) {
         if (response && response.status === 200 && response.type !== 'opaque') {
-          const clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(cleanRequest, clone);
+            cache.put(cleanRequest, response.clone());
           });
         }
         return response;
-      })
-      .catch(function() {
-        return caches.match(cleanRequest);
-      })
+      }).catch(function() { return null; });
+
+      // Return cache immediately; if nothing cached, wait for network
+      return cached || networkFetch;
+    })
   );
 });
