@@ -1167,22 +1167,55 @@ function initApp() {
       e.preventDefault();
       try { handle.setPointerCapture(e.pointerId); } catch(_) {}
       row.classList.add('phone-row-dragging');
+      row.style.transition = 'none';
+      row.style.willChange = 'transform';
       haptic('light');
+
+      // The row follows the pointer via translateY(pointerY - grabY).
+      // grabY is adjusted whenever the row's slot in the DOM changes, so the
+      // row stays glued to the cursor/finger across reorders.
+      let grabY = e.clientY;
+
+      function reinsert(refNode) {
+        const before = row.offsetTop;            // layout position, ignores transform
+        phoneRowsEl.insertBefore(row, refNode);
+        const after = row.offsetTop;
+        grabY += (after - before);
+      }
+
+      // FLIP: the displaced row animates smoothly into its new slot
+      function flip(el, prevTop) {
+        const d = prevTop - el.getBoundingClientRect().top;
+        if (!d) return;
+        el._flip = true;
+        el.style.transition = 'none';
+        el.style.transform = 'translateY(' + d + 'px)';
+        requestAnimationFrame(function() {
+          el.style.transition = 'transform 0.15s ease';
+          el.style.transform = '';
+        });
+        setTimeout(function() { el.style.transition = ''; el._flip = false; }, 180);
+      }
 
       function onMove(ev) {
         const y = ev.clientY;
+        row.style.transform = 'translateY(' + (y - grabY) + 'px)';
         const rows = Array.from(phoneRowsEl.querySelectorAll('.phone-row'));
         for (let i = 0; i < rows.length; i++) {
           const other = rows[i];
-          if (other === row) continue;
+          if (other === row || other._flip) continue;   // skip rows mid-animation
           const rect = other.getBoundingClientRect();
           if (y > rect.top && y < rect.bottom) {
             const before = y < rect.top + rect.height / 2;
             if (before && other.previousElementSibling !== row) {
-              phoneRowsEl.insertBefore(row, other);
+              reinsert(other);
+              row.style.transform = 'translateY(' + (y - grabY) + 'px)';
+              flip(other, rect.top);
               haptic('light');
             } else if (!before && other.nextElementSibling !== row) {
-              phoneRowsEl.insertBefore(row, other.nextElementSibling);
+              reinsert(other.nextElementSibling);
+              row.style.transform = 'translateY(' + (y - grabY) + 'px)';
+              flip(other, rect.top);
               haptic('light');
             }
             break;
@@ -1193,8 +1226,15 @@ function initApp() {
         handle.removeEventListener('pointermove', onMove);
         handle.removeEventListener('pointerup', onUp);
         handle.removeEventListener('pointercancel', onUp);
-        row.classList.remove('phone-row-dragging');
-        refreshPhoneRows();
+        // Settle the row into its slot with a short snap animation
+        row.style.transition = 'transform 0.15s ease';
+        row.style.transform = '';
+        setTimeout(function() {
+          row.style.transition = '';
+          row.style.willChange = '';
+          row.classList.remove('phone-row-dragging');
+          refreshPhoneRows();
+        }, 160);
       }
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
