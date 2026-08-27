@@ -110,21 +110,59 @@ async function decryptPhoneObj(phoneObj) {
   return digits ? { digits, display: formatPhone(digits) } : null;
 }
 
+// ── Multi-phone support ──────────────────────────────────────
+// Canonical shape: driver.phones = [{ digits, display, label }] (max 5, first = primary).
+// Legacy shape { phone, altPhone } is auto-converted on read and mirrored on
+// write so old records, old backups, and an old app version all keep working.
+const MAX_PHONES = 5;
+
+function normalizePhones(d) {
+  if (!d) return d;
+  let phones = [];
+  if (Array.isArray(d.phones) && d.phones.length) {
+    phones = d.phones
+      .filter(function(p) { return p && p.digits; })
+      .map(function(p) { return { digits: p.digits, display: formatPhone(p.digits), label: (p.label || '').trim() }; });
+  } else {
+    if (d.phone && d.phone.digits)       phones.push({ digits: d.phone.digits,    display: formatPhone(d.phone.digits),    label: (d.phone.label    || '').trim() });
+    if (d.altPhone && d.altPhone.digits) phones.push({ digits: d.altPhone.digits, display: formatPhone(d.altPhone.digits), label: (d.altPhone.label || '').trim() });
+  }
+  phones = phones.slice(0, MAX_PHONES);
+  d.phones   = phones;
+  // Legacy mirrors — first two numbers — keep every old code path working
+  d.phone    = phones[0] || null;
+  d.altPhone = phones[1] || null;
+  return d;
+}
+
 // Prepare driver for Firestore (encrypt phones)
 async function encryptDriver(driver) {
-  const d = { ...driver };
-  d.phone    = await encryptPhoneObj(driver.phone);
-  d.altPhone = await encryptPhoneObj(driver.altPhone);
+  const d = normalizePhones({ ...driver });
+  const plainPhones = d.phones;
+  d.phones = await Promise.all(plainPhones.map(async function(p) {
+    const enc = await encryptPhone(p.digits);
+    return p.label ? { enc, label: p.label } : { enc };
+  }));
+  // Legacy mirrors (encrypted) so an older app version can still read this record
+  d.phone    = d.phones[0] ? { enc: d.phones[0].enc } : null;
+  d.altPhone = d.phones[1] ? { enc: d.phones[1].enc } : null;
   return d;
 }
 
 // Restore driver from Firestore (decrypt phones)
 async function decryptDriver(raw) {
   const d = { ...raw };
-  d.phone    = await decryptPhoneObj(raw.phone);
-  d.altPhone = await decryptPhoneObj(raw.altPhone);
-  if (!d.phone && d.altPhone) { d.phone = d.altPhone; d.altPhone = null; }
-  return d;
+  if (Array.isArray(raw.phones) && raw.phones.length) {
+    const phones = await Promise.all(raw.phones.map(async function(p) {
+      const dec = await decryptPhoneObj(p);
+      return dec ? { digits: dec.digits, display: formatPhone(dec.digits), label: (p && p.label) || '' } : null;
+    }));
+    d.phones = phones.filter(Boolean);
+  } else {
+    d.phone    = await decryptPhoneObj(raw.phone);
+    d.altPhone = await decryptPhoneObj(raw.altPhone);
+  }
+  return normalizePhones(d);
 }
 
 // ── isAdmin must be declared before the gate IIFE calls initApp ──
@@ -436,8 +474,8 @@ function initApp() {
   const inputLastName   = document.getElementById('inputLastName');
   const inputFirstName  = document.getElementById('inputFirstName');
   const inputLocation   = document.getElementById('inputLocation');
-  const inputPhone      = document.getElementById('inputPhone');
-  const inputAltPhone   = document.getElementById('inputAltPhone');
+  const phoneRowsEl     = document.getElementById('phoneRows');
+  const btnAddPhone     = document.getElementById('btnAddPhone');
   const deleteModal     = document.getElementById('deleteModal');
   const deleteCancel    = document.getElementById('deleteCancel');
   const deleteConfirm   = document.getElementById('deleteConfirm');
@@ -575,8 +613,8 @@ function initApp() {
   function saveToContacts(driver) {
     const firstName = driver.firstName || '';
     const lastName  = driver.lastName  || '';
-    const digits    = driver.phone ? driver.phone.digits : null;
-    if (!digits) return;
+    const phones    = (driver.phones || []).filter(function(p) { return p && p.digits; });
+    if (phones.length === 0) return;
 
     const loc = (driver.location || '').toLowerCase();
     const org = loc === 'mebane' ? 'Mebane Feeder Driver' : 'UPS Feeder Driver';
@@ -585,7 +623,15 @@ function initApp() {
     vcard += 'N:' + lastName + ';' + firstName + ';;;\r\n';
     vcard += 'FN:' + firstName + ' ' + lastName + '\r\n';
     vcard += 'ORG:' + org + '\r\n';
-    vcard += 'TEL;TYPE=CELL:+1' + digits + '\r\n';
+    phones.forEach(function(p, i) {
+      if (p.label) {
+        // Grouped item with a custom label (supported by iOS/Android contacts)
+        vcard += 'item' + (i + 1) + '.TEL;TYPE=CELL:+1' + p.digits + '\r\n';
+        vcard += 'item' + (i + 1) + '.X-ABLabel:' + p.label.replace(/[\r\n;:,]/g, ' ') + '\r\n';
+      } else {
+        vcard += 'TEL;TYPE=CELL' + (i === 0 ? ';TYPE=PREF' : '') + ':+1' + p.digits + '\r\n';
+      }
+    });
     vcard += 'END:VCARD\r\n';
 
     const blob = new Blob([vcard], { type: 'text/vcard' });
@@ -673,7 +719,7 @@ function initApp() {
     box.appendChild(copyBtn);
 
     // Save to Contacts — all platforms
-    if (driver && driver.phone) {
+    if (driver && driver.phones && driver.phones.length) {
       const saveBtn = document.createElement('button');
       saveBtn.style.cssText = [
         'display:flex;align-items:center;justify-content:center;gap:10px;',
@@ -703,33 +749,28 @@ function initApp() {
     document.body.appendChild(sheet);
   }
 
-  // ── Phone group: plain text for primary, call-only for alt ──
-  function makePhoneGroup(digits, isPrimary, driver) {
+  // ── Phone group: one row per number, first = gold primary ────
+  function ordinalTag(i) {
+    return ['', '2nd', '3rd', '4th', '5th'][i] || (i + 1) + 'th';
+  }
+
+  function makePhoneGroup(phoneObj, index, driver) {
+    const digits = phoneObj.digits;
     const wrap = document.createElement('div');
     wrap.className = 'phone-group';
 
-    if (isPrimary) {
-      // Tappable plain number — opens action sheet
-      const numBtn = document.createElement('button');
-      numBtn.className = 'phone-btn phone-plain-primary';
-      numBtn.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
-        + '<span class="phone-number">' + formatPhone(digits) + '</span>';
-      numBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        haptic('light');
-        showPhoneActionSheet(digits, driver);
-      });
-      wrap.appendChild(numBtn);
-    } else {
-      // Alt: direct call link, no text button
-      const callA = document.createElement('a');
-      callA.href = 'tel:+1' + digits;
-      callA.className = 'phone-btn call-alt';
-      callA.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
-        + '<span class="phone-number">' + formatPhone(digits) + '</span>'
-        + '<span class="alt-tag">Alt</span>';
-      wrap.appendChild(callA);
-    }
+    const numBtn = document.createElement('button');
+    numBtn.className = index === 0 ? 'phone-btn phone-plain-primary' : 'phone-btn call-alt';
+    const tagText = (phoneObj.label && phoneObj.label.trim()) || (index === 0 ? '' : ordinalTag(index));
+    numBtn.innerHTML = '<span class="phone-icon" aria-hidden="true">📞</span>'
+      + '<span class="phone-number">' + formatPhone(digits) + '</span>'
+      + (tagText ? '<span class="alt-tag">' + escapeHtml(tagText) + '</span>' : '');
+    numBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      haptic('light');
+      showPhoneActionSheet(digits, driver);
+    });
+    wrap.appendChild(numBtn);
     return wrap;
   }
 
@@ -744,9 +785,10 @@ function initApp() {
     const card = document.createElement('div');
     card.className = 'card';
 
-    const phonePrimary = driver.phone    ? driver.phone.digits    : '';
-    const phoneAlt     = driver.altPhone ? driver.altPhone.digits : '';
-    outer.dataset.search   = [driver.lastName, driver.firstName, phonePrimary, phoneAlt].join(' ').toLowerCase();
+    const phoneList = (driver.phones || []).filter(function(p) { return p && p.digits; });
+    const searchBits = [driver.lastName, driver.firstName];
+    phoneList.forEach(function(p) { searchBits.push(p.digits); if (p.label) searchBits.push(p.label); });
+    outer.dataset.search   = searchBits.join(' ').toLowerCase();
     outer.dataset.location = (driver.location || '').toLowerCase();
 
     // Header: checkbox (admin) + name + badge
@@ -783,12 +825,11 @@ function initApp() {
     if (badge) header.appendChild(badge);
     card.appendChild(header);
 
-    // Phone buttons: Call + Text for each number
-    if (driver.phone || driver.altPhone) {
+    // Phone buttons — one row per number, in saved order (first = primary)
+    if (phoneList.length > 0) {
       const phones = document.createElement('div');
       phones.className = 'phones';
-      if (driver.phone && driver.phone.digits)         phones.appendChild(makePhoneGroup(driver.phone.digits, true, driver));
-      if (driver.altPhone && driver.altPhone.digits)   phones.appendChild(makePhoneGroup(driver.altPhone.digits, false, driver));
+      phoneList.forEach(function(p, i) { phones.appendChild(makePhoneGroup(p, i, driver)); });
       card.appendChild(phones);
     } else {
       const none = document.createElement('div');
@@ -1116,6 +1157,140 @@ function initApp() {
     updateCount(visible);
   }
 
+  // ── Phone rows editor (add/remove/drag-reorder, max 5) ───────
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function attachRowDrag(row, handle) {
+    handle.addEventListener('pointerdown', function(e) {
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch(_) {}
+      row.classList.add('phone-row-dragging');
+      haptic('light');
+
+      function onMove(ev) {
+        const y = ev.clientY;
+        const rows = Array.from(phoneRowsEl.querySelectorAll('.phone-row'));
+        for (let i = 0; i < rows.length; i++) {
+          const other = rows[i];
+          if (other === row) continue;
+          const rect = other.getBoundingClientRect();
+          if (y > rect.top && y < rect.bottom) {
+            const before = y < rect.top + rect.height / 2;
+            if (before && other.previousElementSibling !== row) {
+              phoneRowsEl.insertBefore(row, other);
+              haptic('light');
+            } else if (!before && other.nextElementSibling !== row) {
+              phoneRowsEl.insertBefore(row, other.nextElementSibling);
+              haptic('light');
+            }
+            break;
+          }
+        }
+      }
+      function onUp() {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        row.classList.remove('phone-row-dragging');
+        refreshPhoneRows();
+      }
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  function makePhoneRow(digits, label) {
+    const row = document.createElement('div');
+    row.className = 'phone-row';
+
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'phone-row-handle';
+    handle.setAttribute('aria-label', 'Drag to reorder');
+    handle.textContent = '≡';
+
+    const numInput = document.createElement('input');
+    numInput.type = 'tel';
+    numInput.className = 'phone-row-num';
+    numInput.placeholder = 'Phone number';
+    numInput.autocomplete = 'off';
+    numInput.value = digits ? formatPhone(digits) : '';
+    numInput.addEventListener('input', liveFormatPhone);
+
+    const lblInput = document.createElement('input');
+    lblInput.type = 'text';
+    lblInput.className = 'phone-row-label';
+    lblInput.placeholder = 'Label';
+    lblInput.maxLength = 12;
+    lblInput.autocomplete = 'off';
+    lblInput.value = label || '';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'phone-row-remove';
+    removeBtn.setAttribute('aria-label', 'Remove number');
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', function() {
+      haptic('light');
+      row.remove();
+      refreshPhoneRows();
+    });
+
+    row.appendChild(handle);
+    row.appendChild(numInput);
+    row.appendChild(lblInput);
+    row.appendChild(removeBtn);
+    attachRowDrag(row, handle);
+    return row;
+  }
+
+  function refreshPhoneRows() {
+    if (phoneRowsEl.querySelectorAll('.phone-row').length === 0) {
+      phoneRowsEl.appendChild(makePhoneRow('', ''));
+    }
+    const rows = phoneRowsEl.querySelectorAll('.phone-row');
+    rows.forEach(function(r, i) {
+      r.classList.toggle('phone-row-primary', i === 0);
+      r.querySelector('.phone-row-num').placeholder = i === 0 ? 'Primary number' : 'Phone number';
+    });
+    btnAddPhone.style.display = rows.length >= MAX_PHONES ? 'none' : 'block';
+  }
+
+  function setPhoneRows(phones) {
+    phoneRowsEl.innerHTML = '';
+    const list = (phones && phones.length) ? phones : [{ digits: '', label: '' }];
+    list.forEach(function(p) { phoneRowsEl.appendChild(makePhoneRow(p.digits, p.label)); });
+    refreshPhoneRows();
+  }
+
+  // Collect rows top-to-bottom. Empty rows are skipped; a row with a partial
+  // number is an error. Returns { phones } or { error }.
+  function collectPhoneRows() {
+    const phones = [];
+    const rows = phoneRowsEl.querySelectorAll('.phone-row');
+    for (let i = 0; i < rows.length; i++) {
+      const raw   = rows[i].querySelector('.phone-row-num').value.trim();
+      const label = rows[i].querySelector('.phone-row-label').value.trim();
+      if (!raw) continue;
+      const digits = normalisePhone(raw);
+      if (!digits) return { error: 'Number ' + (i + 1) + ' needs at least 10 digits.' };
+      phones.push({ digits: digits, display: formatPhone(digits), label: label });
+    }
+    return { phones: phones.slice(0, MAX_PHONES) };
+  }
+
+  btnAddPhone.addEventListener('click', function() {
+    if (phoneRowsEl.querySelectorAll('.phone-row').length >= MAX_PHONES) return;
+    haptic('light');
+    const row = makePhoneRow('', '');
+    phoneRowsEl.appendChild(row);
+    refreshPhoneRows();
+    row.querySelector('.phone-row-num').focus();
+  });
+
   // ── Panel helpers ────────────────────────────────────────────
   function openAddPanel() {
     editingKey = null;
@@ -1123,7 +1298,7 @@ function initApp() {
     btnSave.textContent = 'Save Driver';
     inputLastName.value = ''; inputFirstName.value = '';
     inputLocation.value = 'Greensboro';
-    inputPhone.value = ''; inputAltPhone.value = '';
+    setPhoneRows([]);
     panelNote.textContent = '';
     showPanel();
   }
@@ -1138,8 +1313,7 @@ function initApp() {
     // Ensure location maps to a valid select option — default to Greensboro
     const validLocs = ['Greensboro', 'Mebane'];
     inputLocation.value = validLocs.includes(driver.location) ? driver.location : 'Greensboro';
-    inputPhone.value     = driver.phone    ? formatPhone(driver.phone.digits)    : '';
-    inputAltPhone.value  = driver.altPhone ? formatPhone(driver.altPhone.digits) : '';
+    setPhoneRows(normalizePhones(Object.assign({}, driver)).phones);
     panelNote.textContent = '';
     function onLocationChange() {
       if (inputLocation.value !== 'Retired') return;
@@ -1202,12 +1376,9 @@ function initApp() {
     const lastName  = inputLastName.value.trim();
     const firstName = inputFirstName.value.trim();
     if (!lastName || !firstName) { alert('⚠️ First and last name are required.'); panelNote.textContent = '⚠️ First and last name are required.'; return; }
-    const rawPhone       = inputPhone.value.trim();
-    const rawAltPhone    = inputAltPhone.value.trim();
-    const phoneDigits    = normalisePhone(rawPhone);
-    const altPhoneDigits = normalisePhone(rawAltPhone);
-    if (rawPhone && !phoneDigits)    { alert('⚠️ Primary phone needs at least 10 digits.'); panelNote.textContent = '⚠️ Primary phone needs at least 10 digits.'; return; }
-    if (rawAltPhone && !altPhoneDigits) { alert('⚠️ Alt phone needs at least 10 digits.'); panelNote.textContent = '⚠️ Alt phone needs at least 10 digits.'; return; }
+    const collected = collectPhoneRows();
+    if (collected.error) { alert('⚠️ ' + collected.error); panelNote.textContent = '⚠️ ' + collected.error; return; }
+    const phones = collected.phones;
 
     const newKey = driverKey(lastName, firstName);
     const isNew  = !driverSet.has(newKey);
@@ -1223,14 +1394,13 @@ function initApp() {
       }
     }
 
-    const driver = {
+    const driver = normalizePhones({
       lastName,
       firstName,
       location: normaliseSlic(inputLocation.value),
-      phone:    phoneDigits    ? { digits: phoneDigits,    display: formatPhone(phoneDigits) }    : null,
-      altPhone: altPhoneDigits ? { digits: altPhoneDigits, display: formatPhone(altPhoneDigits) } : null,
+      phones:   phones,
       updatedAt: new Date().toLocaleString(),
-    };
+    });
 
     try {
       btnSave.disabled = true;
@@ -1578,15 +1748,19 @@ function initApp() {
       return row;
     }
 
-    // Section 1: Same primary & alt number
+    // Section 1: Same number listed twice on one contact
     const sameBoth = [];
     driverMap.forEach(function(d, key) {
-      if (d.phone && d.altPhone &&
-          d.phone.digits && d.altPhone.digits &&
-          d.phone.digits.replace(/\D/g,'') === d.altPhone.digits.replace(/\D/g,''))
-        sameBoth.push({ key: key, d: d });
+      const nd = normalizePhones(Object.assign({}, d));
+      const seen = new Set();
+      let dupDigits = null;
+      nd.phones.forEach(function(p) {
+        if (seen.has(p.digits)) dupDigits = p.digits;
+        seen.add(p.digits);
+      });
+      if (dupDigits) sameBoth.push({ key: key, d: d, dupDigits: dupDigits });
     });
-    const sec1hdr = makeHeader('🔁', 'Same Primary & Alt Number (' + sameBoth.length + ')', '#FFB500');
+    const sec1hdr = makeHeader('🔁', 'Duplicate Number on One Contact (' + sameBoth.length + ')', '#FFB500');
     dupResults.appendChild(sec1hdr);
     if (sameBoth.length === 0) {
       const ok = document.createElement('p');
@@ -1601,18 +1775,26 @@ function initApp() {
         wrap.dataset.mergeRow = '1';
         const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
         const nm = document.createElement('div'); nm.style.cssText = 'font-size:13px;font-weight:700;color:#fff;'; nm.textContent = d.lastName + ', ' + d.firstName;
-        const ph = document.createElement('div'); ph.style.cssText = 'font-size:11px;color:#FFB500;margin-top:2px;'; ph.textContent = formatPhone(d.phone.digits) + ' (both fields)';
+        const ph = document.createElement('div'); ph.style.cssText = 'font-size:11px;color:#FFB500;margin-top:2px;'; ph.textContent = formatPhone(item.dupDigits) + ' (listed twice)';
         info.appendChild(nm); info.appendChild(ph);
         const mergeBtn = document.createElement('button');
-        mergeBtn.textContent = '⬆ Merge to Primary';
+        mergeBtn.textContent = '🧹 Remove Duplicate';
         mergeBtn.style.cssText = 'padding:5px 9px;border-radius:8px;border:1.5px solid #FFB500;background:rgba(255,181,0,0.15);color:#FFB500;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;';
         mergeBtn.addEventListener('click', async function() {
           mergeBtn.disabled = true; mergeBtn.textContent = '…';
-          const updated = Object.assign({}, d, { altPhone: null, updatedAt: new Date().toLocaleString() });
+          // Keep the first occurrence of each number (preserving order and labels)
+          const nd = normalizePhones(Object.assign({}, d));
+          const seenD = new Set();
+          const deduped = nd.phones.filter(function(p) {
+            if (seenD.has(p.digits)) return false;
+            seenD.add(p.digits);
+            return true;
+          });
+          const updated = normalizePhones(Object.assign({}, d, { phones: deduped, updatedAt: new Date().toLocaleString() }));
           try {
             await saveDriverToFirestore(updated); driverMap.set(key, updated); upsertDriver(updated); applyFilter(); wrap.remove();
-            sec1hdr.textContent = '🔁 Same Primary & Alt Number (' + dupResults.querySelectorAll('[data-merge-row]').length + ')';
-          } catch(e) { mergeBtn.disabled = false; mergeBtn.textContent = '⬆ Merge to Primary'; alert('Failed: ' + e.message); }
+            sec1hdr.textContent = '🔁 Duplicate Number on One Contact (' + dupResults.querySelectorAll('[data-merge-row]').length + ')';
+          } catch(e) { mergeBtn.disabled = false; mergeBtn.textContent = '🧹 Remove Duplicate'; alert('Failed: ' + e.message); }
         });
         wrap.appendChild(info); wrap.appendChild(mergeBtn); dupResults.appendChild(wrap);
       });
@@ -1656,7 +1838,7 @@ function initApp() {
 
     // Section 3: No phone on file
     const noPhone = [];
-    driverMap.forEach(function(d, key) { if (!d.phone && !d.altPhone) noPhone.push({ key: key, d: d }); });
+    driverMap.forEach(function(d, key) { if (normalizePhones(Object.assign({}, d)).phones.length === 0) noPhone.push({ key: key, d: d }); });
     noPhone.sort(function(a, b) { return (a.d.lastName + a.d.firstName).toLowerCase() < (b.d.lastName + b.d.firstName).toLowerCase() ? -1 : 1; });
     dupResults.appendChild(makeHeader('📵', 'No Phone on File (' + noPhone.length + ')', '#f87171'));
     if (noPhone.length === 0) {
@@ -1830,11 +2012,18 @@ function initApp() {
     // guard explicitly so a future storage-format change doesn't silently export
     // bare { enc } objects that can't be re-imported.
     const drivers = Array.from(driverMap.values()).map(function(d) {
-      function cleanPhone(p) {
-        if (!p || !p.digits) return null;
-        return { digits: p.digits, display: formatPhone(p.digits) };
-      }
-      return Object.assign({}, d, { phone: cleanPhone(d.phone), altPhone: cleanPhone(d.altPhone) });
+      const nd = normalizePhones(Object.assign({}, d));
+      const phones = nd.phones.map(function(p) {
+        const out = { digits: p.digits, display: formatPhone(p.digits) };
+        if (p.label) out.label = p.label;
+        return out;
+      });
+      // phones[] is canonical; phone/altPhone mirrors keep old backups importable
+      return Object.assign({}, nd, {
+        phones:   phones,
+        phone:    phones[0] ? { digits: phones[0].digits, display: phones[0].display } : null,
+        altPhone: phones[1] ? { digits: phones[1].digits, display: phones[1].display } : null
+      });
     });
     const blob = new Blob([JSON.stringify(drivers, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -2034,20 +2223,21 @@ function initApp() {
       }
 
       if (prepared.fileType === 'json') {
-        newDrivers = prepared.drivers.map(function(d) { return Object.assign({}, d, { location: normaliseSlic(d.location) }); });
+        // normalizePhones accepts both old {phone, altPhone} and new {phones:[]} backups
+        newDrivers = prepared.drivers.map(function(d) { return normalizePhones(Object.assign({}, d, { location: normaliseSlic(d.location) })); });
         setProgress(35, 'JSON parsed…');
 
       } else if (prepared.fileType === 'xlsx') {
         setProgress(30, 'Parsed ' + prepared.drivers.length + ' rows from Excel…');
         importStatus.textContent = 'Parsed ' + prepared.drivers.length + ' drivers…';
         newDrivers = prepared.drivers.map(function(d) {
-          return {
+          return normalizePhones({
             lastName:  d.lastName,
             firstName: d.firstName,
             location:  'Greensboro',
             phone:     makePhone(d.rawPhone),
             altPhone:  makePhone(d.rawAlt),
-          };
+          });
         }).filter(function(d) { return d.lastName && d.firstName; });
         if (newDrivers.length === 0) throw new Error('No valid driver records found in the Excel file.');
         setProgress(35, 'Found ' + newDrivers.length + ' drivers…');
@@ -2070,6 +2260,29 @@ function initApp() {
     newDrivers.forEach(function(d) {
       const key = driverKey(d.lastName, d.firstName);
       incomingMap.set(keyToDocId(key), d);
+    });
+
+    // ── Merge with existing records so imports don't wipe hand-added data ──
+    // An Excel sheet only carries 2 numbers per driver. If a driver already has
+    // extra numbers (spouse, home, etc.) or labels, keep them: imported numbers
+    // lead, matching digits inherit their saved label, and existing numbers the
+    // file doesn't mention are appended (up to the 5-number cap).
+    const existingByDocId = new Map();
+    driverMap.forEach(function(d, key) { existingByDocId.set(keyToDocId(key), d); });
+    incomingMap.forEach(function(d, docId) {
+      normalizePhones(d);
+      const existing = existingByDocId.get(docId);
+      if (!existing) return;
+      const ex = normalizePhones(Object.assign({}, existing));
+      d.phones = d.phones.map(function(p) {
+        const match = ex.phones.find(function(q) { return q.digits === p.digits; });
+        return (match && match.label && !p.label) ? Object.assign({}, p, { label: match.label }) : p;
+      });
+      ex.phones.forEach(function(q) {
+        if (d.phones.length >= MAX_PHONES) return;
+        if (!d.phones.some(function(p) { return p.digits === q.digits; })) d.phones.push(q);
+      });
+      normalizePhones(d);
     });
 
     // ── Build preview summary ─────────────────────────────────
@@ -2281,9 +2494,6 @@ function initApp() {
     input.setSelectionRange(newPos, newPos);
   }
 
-  inputPhone.addEventListener('input', liveFormatPhone);
-  inputAltPhone.addEventListener('input', liveFormatPhone);
-
   btnSave.addEventListener('click', saveDriver);
 
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
@@ -2463,7 +2673,8 @@ function initApp() {
         req.onerror   = function() { resolve([]); };
       });
       // Rows store { id, driver } — driver is already decrypted and pre-sorted.
-      return rows.map(function(r) { return r.driver; }).filter(function(d) { return !d.retired; });
+      // normalizePhones upgrades any cached legacy phone/altPhone shape in place.
+      return rows.map(function(r) { return normalizePhones(r.driver); }).filter(function(d) { return !d.retired; });
     } catch(_) { return []; }
   }
 
