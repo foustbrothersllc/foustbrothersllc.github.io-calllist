@@ -130,14 +130,9 @@
         </div>
         <div class="field-row">
           <div class="field-group">
-            <label for="inputPhone">Primary Phone</label>
-            <input type="tel" id="inputPhone" placeholder="Any format — auto-normalized">
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field-group">
-            <label for="inputAltPhone">Alt Phone <span class="optional">(optional)</span></label>
-            <input type="tel" id="inputAltPhone" placeholder="Any format — auto-normalized">
+            <label>Phone Numbers <span class="optional">(top = primary · drag ≡ to reorder)</span></label>
+            <div id="phoneRows" class="phone-rows"></div>
+            <button type="button" id="btnAddPhone" class="btn-add-phone">＋ Add another number</button>
           </div>
         </div>
         <div class="panel-actions">
@@ -260,6 +255,6 @@
 
   <!-- SheetJS for Excel parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
