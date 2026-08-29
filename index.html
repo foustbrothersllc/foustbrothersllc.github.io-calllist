@@ -1,1038 +1,299 @@
-/* ============================================================
-   Driver Call List — styles.css
-   ============================================================ */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Driver click-to-call directory">
+  <!-- iOS PWA standalone mode -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Driver List">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Driver Call List</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <!-- ── Access Key Gate ── -->
+  <div id="accessGate" class="access-gate">
+    <div class="gate-card">
+      <div class="gate-icon">🔒</div>
+      <h1 class="gate-title">Driver Call List</h1>
+      <p class="gate-sub">Authorized Personnel Only</p>
+      <div class="gate-field-wrap">
+        <input
+          type="password"
+          id="accessKeyInput"
+          class="gate-input"
+          placeholder="Enter access key"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        >
+        <button id="btnAccessKey" class="gate-btn">Unlock</button>
+      </div>
+      <button id="btnBiometric" class="gate-bio-btn" style="display:none">
+        <span class="bio-icon">👆</span> Use Biometrics
+      </button>
+      <p id="gateError" class="gate-error"></p>
+    </div>
+  </div>
 
-:root {
-  --brown:        #351C15;
-  --brown-dark:   #1e0f0b;
-  --brown-mid:    #5a3525;
-  --brown-light:  #f5ede8;
-  --gold:         #FFB500;
-  --gold-dark:    #cc8f00;
-  --gold-light:   #fff3cc;
-  --grenc-bg:     #dbeafe;
-  --grenc-fg:     #1d4ed8;
-  --mebnc-bg:     #dcfce7;
-  --mebnc-fg:     #166534;
-  --text:         #1a1a1a;
-  --muted:        #7a6055;
-  --border:       #e5d5cc;
-  --bg:           #f5ede8;
-  --white:        #ffffff;
-  --danger:       #b91c1c;
-  --danger-bg:    #fee2e2;
-  --radius:       12px;
-  --radius-sm:    9px;
-  --shadow:       0 1px 4px rgba(53,28,21,0.10);
-  --shadow-lg:    0 4px 18px rgba(53,28,21,0.18);
-}
+  <!-- ── Main App (hidden until access granted) ── -->
+  <div id="appWrapper" style="display:none">
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  background: #000000;
-  color: var(--text);
-  min-height: 100vh;
-  -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
-  overscroll-behavior-y: none;
-}
+    <!-- Watermark -->
+    <div class="watermark" aria-hidden="true">
+      <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+        <path d="M100 5 L190 40 L190 130 C190 185 150 220 100 235 C50 220 10 185 10 130 L10 40 Z"/>
+      </svg>
+    </div>
 
-/* ── Access Gate ── */
-.access-gate {
-  position: fixed;
-  inset: 0;
-  background: #000000;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.gate-card {
-  background: var(--white);
-  border-radius: 20px;
-  padding: 36px 28px 32px;
-  max-width: 360px;
-  width: 100%;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.35);
-  text-align: center;
-  border-top: 4px solid var(--gold);
-}
-.gate-icon { font-size: 40px; margin-bottom: 12px; }
-.gate-title {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--brown);
-  margin-bottom: 4px;
-}
-.gate-sub {
-  font-size: 12px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 22px;
-}
-.gate-field-wrap {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.gate-input {
-  flex: 1;
-  padding: 11px 14px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border);
-  font-size: 15px;
-  outline: none;
-  color: var(--text);
-  transition: border-color 0.15s;
-  -webkit-appearance: none;
-}
-.gate-input:focus { border-color: var(--gold); }
-.gate-btn {
-  padding: 11px 18px;
-  border-radius: 10px;
-  border: none;
-  background: var(--brown);
-  color: var(--gold);
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: filter 0.1s;
-}
-.gate-btn:active { filter: brightness(1.2); }
-.gate-bio-btn {
-  width: 100%;
-  padding: 11px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border);
-  background: var(--brown-light);
-  color: var(--brown);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  transition: background 0.15s;
-}
-.gate-bio-btn:active { background: var(--border); }
-.bio-icon { font-size: 20px; }
-.gate-error {
-  font-size: 13px;
-  color: var(--danger);
-  min-height: 18px;
-  font-weight: 600;
-}
 
-/* ── Watermark ── */
-.watermark { display: none; }
+    <!-- ── Desktop-only sidebar (hidden on mobile — see desktop block in styles.css) ── -->
+    <aside class="desktop-sidebar" id="desktopSidebar">
+      <div class="ds-section">
+        <h3 class="ds-heading">🔍 Search &amp; Filter</h3>
+        <input type="search" id="desktopSearch" class="ds-search" placeholder="Search by name or number…" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search drivers">
+      </div>
+      <div class="ds-section">
+        <span class="ds-label">Location</span>
+        <button type="button" class="ds-filter active" data-loc="all">All</button>
+        <button type="button" class="ds-filter" data-loc="greensboro">GRENC</button>
+        <button type="button" class="ds-filter" data-loc="mebane">MEBNC</button>
+      </div>
+      <div class="ds-spacer"></div>
+      <div class="ds-section ds-bottom">
+        <button type="button" id="desktopAddBtn" class="ds-add" style="display:none">＋ Add Driver</button>
+      </div>
+    </aside>
 
-/* ── Header ── */
-.header {
-  background: var(--brown);
-  color: var(--white);
-  padding: 14px 16px 10px;
-  position: sticky;
-  top: 0; z-index: 100;
-  box-shadow: var(--shadow-lg);
-  border-bottom: 3px solid var(--gold);
-}
-.header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 11px; }
-.header-title { flex: 1; }
-.header-title h1 { font-size: 17px; font-weight: 800; color: var(--gold); line-height: 1.1; }
-.header-sub { font-size: 11px; color: rgba(255,255,255,0.55); font-weight: 400; letter-spacing: 0.4px; text-transform: uppercase; }
-/* Two subtitle variants share .header-sub's styling — mobile keeps the
-   original text; desktop (≥1024px, see media block below) swaps to a
-   more suitable one. Default here is mobile: only .header-sub-mobile shows. */
-.header-sub-desktop { display: none; }
+    <header class="header">
+      <div class="header-top">
+        <div class="header-title">
+          <h1>Driver Call List</h1>
+          <span class="header-sub header-sub-mobile">Click-to-Call Directory</span>
+          <span class="header-sub header-sub-desktop">Company Driver Directory</span>
+        </div>
+        <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
+        <button id="btnAdminLogoutHeader" class="btn-header-icon" title="Admin logout" style="display:none;border-color:rgba(255,100,100,0.5);color:rgba(255,150,150,0.85);">🔓</button>
+      </div>
 
-.btn-header-icon {
-  background: none;
-  border: 1.5px solid rgba(255,181,0,0.4);
-  color: rgba(255,255,255,0.7);
-  font-size: 16px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.btn-header-icon:active { background: rgba(255,255,255,0.1); }
+      <div class="search-row">
+        <div class="search-wrap">
+          <input
+            type="search"
+            id="searchBox"
+            placeholder="Search by name or number…"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Search drivers"
+            inputmode="search"
+            readonly
+            onfocus="this.removeAttribute('readonly')"
+          >
+          <button id="searchClear" class="search-clear-btn" aria-label="Clear search" style="display:none">✕</button>
+        </div>
+      </div>
 
-.btn-admin {
-  flex: 1;
-  padding: 7px;
-  border-radius: 8px;
-  border: 1.5px solid rgba(255,181,0,0.5);
-  background: transparent;
-  color: rgba(255,255,255,0.85);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.btn-admin-danger {
-  border-color: rgba(255,100,100,0.5);
-  color: rgba(255,150,150,0.85);
-}
+      <div class="filter-btns" role="group" aria-label="Filter by location">
+        <button class="filter-btn active" data-loc="all">All</button>
+        <button class="filter-btn" data-loc="greensboro">GRENC</button>
+        <button class="filter-btn" data-loc="mebane">MEBNC</button>
+      </div>
 
-.search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.search-wrap #searchBox { width: 100%; padding-right: 36px; }
-.search-clear-btn {
-  position: absolute;
-  right: 8px;
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.55);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 50%;
-  line-height: 1;
-  transition: color 0.15s;
-}
-.search-clear-btn:active { color: var(--gold); }
+      <p class="count-bar" id="countBar" aria-live="polite"></p>
 
-#searchBox {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1.5px solid rgba(255,181,0,0.35);
-  font-size: 16px;
-  background: rgba(255,255,255,0.10);
-  color: var(--white);
-  outline: none;
-  transition: background 0.15s, border-color 0.15s;
-  -webkit-appearance: none;
-}
-#searchBox::placeholder { color: rgba(255,255,255,0.5); }
-#searchBox:focus { background: rgba(255,255,255,0.18); border-color: var(--gold); }
+      <!-- Admin bar (hidden by default) -->
+      <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
+        <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
+        <button id="btnImport"    class="btn-admin">📋 Import</button>
+        <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
+        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
+        <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
+      </div>
+    </header>
 
-.filter-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.filter-btn {
-  padding: 5px 14px;
-  border-radius: 20px;
-  border: 1.5px solid rgba(255,181,0,0.4);
-  background: transparent;
-  color: rgba(255,255,255,0.85);
-  font-size: 12px; font-weight: 600; letter-spacing: 0.4px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.filter-btn.active { background: var(--gold); color: var(--brown); border-color: var(--gold); font-weight: 800; }
-.count-bar { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+    <!-- Add / Edit Panel -->
+    <div class="add-panel" id="addPanel">
+      <div class="add-panel-header">
+        <span id="addPanelTitle">Add Driver</span>
+        <button class="panel-close-btn" id="panelCloseBtn" aria-label="Close panel">✕</button>
+      </div>
+      <div class="add-panel-body">
 
-/* ── Swipe hint ── */
-.swipe-hint {
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-  padding: 8px 0 4px;
-  letter-spacing: 0.2px;
-  font-style: italic;
-}
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputFirstName">First Name</label>
+            <input type="text" id="inputFirstName" placeholder="First name" autocapitalize="words">
+          </div>
+          <div class="field-group">
+            <label for="inputLastName">Last Name</label>
+            <input type="text" id="inputLastName" placeholder="Last name" autocapitalize="words">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inputLocation">Location (SLIC)</label>
+            <select id="inputLocation">
+              <option value="Greensboro">GRENC</option>
+              <option value="Mebane">MEBNC</option>
+              <option value="" disabled>──────────</option>
+              <option value="Retired">🏷 Mark as Retired</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label>Phone Numbers <span class="optional">(top = primary · drag ≡ to reorder)</span></label>
+            <div id="phoneRows" class="phone-rows"></div>
+            <button type="button" id="btnAddPhone" class="btn-add-phone">＋ Add another number</button>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-cancel" id="btnCancel">Cancel</button>
+          <button class="btn-save"   id="btnSave">Save Driver</button>
+        </div>
+        <p class="panel-note" id="panelNote"></p>
+      </div>
+    </div>
+    <div class="panel-overlay" id="panelOverlay"></div>
 
-/* ── Card list ── */
-.list {
-  padding: 8px 10px 90px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 700px;
-  margin: 0 auto;
-  position: relative; z-index: 1;
-}
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+      <div class="modal">
+        <div class="modal-icon">🗑</div>
+        <h2 class="modal-title" id="deleteModalTitle">Delete Driver?</h2>
+        <p class="modal-body" id="deleteModalBody">This will permanently remove this driver.</p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="deleteCancel">Keep</button>
+          <button class="btn-delete-confirm" id="deleteConfirm">Delete</button>
+        </div>
+      </div>
+    </div>
 
-/* ── Swipe-to-delete wrapper ── */
-.card-outer {
-  position: relative;
-  border-radius: var(--radius);
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-}
+    <!-- Import Modal -->
+    <div class="modal-backdrop" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+      <div class="modal" style="max-width:420px;border-top-color:#351C15;">
+        <div class="modal-icon">📋</div>
+        <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
+        <p class="modal-body">Upload an <code>.xlsx</code> or <code>.json</code> file. Existing drivers will be updated, new ones added.</p>
 
-/* The actual white card */
-.card {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  box-shadow: var(--shadow);
-  border-left: 3px solid var(--gold);
-  position: relative;
-}
+        <!-- Progress bar -->
+        <div id="importProgressWrap" style="display:none;margin-bottom:10px;">
+          <div style="background:#e5d5cc;border-radius:20px;height:8px;overflow:hidden;">
+            <div id="importProgressBar" style="height:100%;width:0%;background:#351C15;border-radius:20px;transition:width 0.2s ease;"></div>
+          </div>
+          <p id="importProgressLabel" style="font-size:11px;color:#5a3525;text-align:center;margin-top:4px;"></p>
+        </div>
 
-/* Photo avatar on card */
-.card-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  border: 2px solid var(--gold);
-}
-.card-avatar-placeholder {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--brown-light);
-  border: 2px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
+        <div style="margin-bottom:14px;">
+          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#FFB500;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel or JSON file</label>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;color:#351C15;">
+        </div>
 
-/* ── Card header row: avatar + name + badge ── */
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.card-name-block { flex: 1; min-width: 0; }
-.name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--brown);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.loc-badge {
-  font-size: 10px; font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 10px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
-}
-.loc-greensboro { background: var(--grenc-bg); color: var(--grenc-fg); }
-.loc-mebane     { background: var(--mebnc-bg); color: var(--mebnc-fg); }
+        <!-- Update log -->
+        <div id="importUpdateLog" style="display:none;margin-bottom:12px;background:#f5ede8;border-radius:9px;padding:10px;font-size:12px;color:#351C15;">
+          <strong style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Update Log</strong>
+          <div id="importLogEntries" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;"></div>
+        </div>
 
-/* ── Phone buttons row ── */
-.phones {
-  display: flex;
-  gap: 6px;
-  flex-direction: column;
-}
-.phone-group {
-  display: flex;
-  gap: 6px;
-}
-.phone-group-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  margin-bottom: 3px;
-}
+        <p id="importStatus" style="font-size:12px;color:#5a3525;font-style:italic;min-height:18px;margin-bottom:12px;text-align:center;"></p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="importCancel">Cancel</button>
+          <button class="btn-save" id="importConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Import</button>
+        </div>
+      </div>
+    </div>
 
-.phone-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 9px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: filter 0.1s, transform 0.1s;
-  text-align: center;
-  min-width: 0;
-  border: none;
-  cursor: pointer;
-}
-.phone-btn:active { filter: brightness(0.88); transform: scale(0.97); }
-.phone-btn.call-primary { background: var(--gold); color: var(--brown-dark); }
-.phone-btn.text-primary { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
-.phone-btn.call-alt  { background: var(--brown-light); color: var(--brown); border: 1px solid var(--border); }
-.phone-btn.text-alt  { background: var(--bg); color: var(--brown-mid); border: 1px solid var(--border); }
-/* Plain primary: gold pill, tappable → opens Call/Text sheet */
-.phone-btn.phone-plain-primary {
-  background: var(--gold);
-  color: var(--brown-dark);
-  border: none;
-  font-size: 13px;
-  font-weight: 700;
-  justify-content: center;
-  padding: 9px 8px;
-  cursor: pointer;
-  width: 100%;
-  border-radius: var(--radius-sm);
-}
+    <!-- Duplicate Scan Modal -->
+    <!-- List Cleanup Modal -->
+    <div class="modal-backdrop" id="dupModal" role="dialog" aria-modal="true">
+      <div class="modal" style="max-width:440px;border-top-color:#ca8a04;">
+        <div class="modal-icon">🧹</div>
+        <h2 class="modal-title">List Cleanup</h2>
+        <button id="dupMarkClean" style="display:none;width:100%;margin-bottom:12px;padding:10px;border-radius:10px;border:none;background:#166534;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✅ List is Clean — Reset Baseline</button>
+        <div id="dupResults" style="max-height:50vh;overflow-y:auto;text-align:left;font-size:13px;color:#5a3525;margin-bottom:14px;-webkit-overflow-scrolling:touch;"></div>
+        <div class="modal-actions" style="flex-wrap:wrap;gap:6px;">
+          <button class="btn-modal-cancel" id="dupClose" style="flex:1;">Close</button>
+          <button class="btn-delete-confirm" id="dupRetireSelected" style="background:#7a6055;display:none;flex:1;">🏷 Retire</button>
+          <button class="btn-delete-confirm" id="dupDeleteSelected" style="background:#b91c1c;display:none;flex:1;">🗑 Delete</button>
+        </div>
+      </div>
+    </div>
 
-.phone-icon  { font-size: 13px; flex-shrink: 0; }
-.phone-number { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.alt-tag {
-  font-size: 9px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.4px;
-  padding: 1px 5px; border-radius: 5px;
-  background: rgba(53,28,21,0.10); color: var(--brown);
-  flex-shrink: 0;
-}
+    <!-- Import Preview Modal -->
+    <div class="modal-backdrop" id="importPreviewModal" role="dialog" aria-modal="true">
+      <div class="modal" style="max-width:380px;border-top-color:#351C15;">
+        <div class="modal-icon">📋</div>
+        <h2 class="modal-title">Import Preview</h2>
+        <div id="importPreviewBody" style="font-size:13px;color:#5a3525;margin-bottom:16px;line-height:1.6;text-align:left;background:#f5ede8;border-radius:10px;padding:12px;"></div>
+        <p style="font-size:12px;color:#7a6055;margin-bottom:14px;text-align:center;">This action cannot be undone. Proceed?</p>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" id="importPreviewCancel">Cancel</button>
+          <button class="btn-save" id="importPreviewConfirm" style="flex:2;padding:11px;border-radius:10px;border:none;font-size:14px;font-weight:800;cursor:pointer;">Confirm Import</button>
+        </div>
+      </div>
+    </div>
 
-.no-phone { font-size: 12px; color: var(--muted); font-style: italic; padding: 3px 0; }
+    <!-- FAB -->
+    <button class="fab" id="fabAdd" aria-label="Add driver" style="display:none"><span>+</span></button>
 
-/* Edit button below phones */
-.card-actions { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 7px; }
-.btn-edit {
-  width: 100%;
-  padding: 6px 0;
-  border-radius: 8px;
-  border: none;
-  background: var(--gold-light);
-  color: var(--brown);
-  font-size: 12px; font-weight: 600;
-  cursor: pointer;
-}
-.btn-edit:active { filter: brightness(0.88); }
+    <!-- ── Desktop-only table view (hidden on mobile — see desktop block in styles.css) ── -->
+    <div class="desktop-table-wrap" id="desktopTableWrap">
+      <table class="desktop-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Primary Phone</th>
+            <th>Other Numbers</th>
+            <th>Location</th>
+            <th>Last Edited</th>
+            <th class="dt-th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="desktopTableBody"></tbody>
+      </table>
+      <div id="desktopTableEmpty" class="dt-empty">No drivers found matching your search.</div>
+    </div>
 
-/* ── Multi-select checkbox ── */
-.card-checkbox {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  border: 2px solid var(--border);
-  cursor: pointer;
-  accent-color: var(--brown);
-  flex-shrink: 0;
-  margin-right: 2px;
-}
-.card-selected .card {
-  border-left-color: var(--danger);
-  background: var(--danger-bg);
-}
-.card-selected .card .name {
-  color: var(--danger);
-}
+    <!-- Card list -->
+    <main class="list" id="cardList">
+      <div id="noResults" role="status">No drivers found matching your search.</div>
+    </main>
 
-#noResults { display: none; text-align: center; padding: 48px 20px; color: var(--muted); font-size: 16px; }
+  </div><!-- /#appWrapper -->
 
-/* ── FAB ── */
-.fab {
-  position: fixed;
-  bottom: 24px; right: 20px;
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  background: var(--gold);
-  color: var(--brown-dark);
-  border: none;
-  font-size: 30px; font-weight: 300;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(53,28,21,0.30);
-  z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.fab:active { transform: scale(0.92); }
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js').then(function(reg) {
+          reg.addEventListener('updatefound', function() {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                const bar = document.createElement('div');
+                bar.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;background:#351C15;color:#FFB500;border-radius:40px;padding:10px 20px;font-size:13px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,0.3);white-space:nowrap;cursor:pointer;';
+                bar.textContent = '🔄 Update available — tap to refresh';
+                bar.addEventListener('click', function() { window.location.reload(); });
+                document.body.appendChild(bar);
+              }
+            });
+          });
+        });
+      });
+    }
+  </script>
 
-/* ── Add/Edit Panel ── */
-.panel-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(53,28,21,0.45);
-  z-index: 250;
-  backdrop-filter: blur(2px);
-}
-.panel-overlay.visible { display: block; }
-
-.add-panel {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  background: var(--white);
-  border-radius: 18px 18px 0 0;
-  z-index: 300;
-  box-shadow: 0 -6px 30px rgba(53,28,21,0.22);
-  transform: translateY(100%);
-  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-  max-width: 700px;
-  margin: 0 auto;
-  max-height: 92vh;
-  overflow-y: auto;
-}
-.add-panel.open { transform: translateY(0); }
-
-.add-panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px 12px;
-  border-bottom: 2px solid var(--gold);
-  position: sticky; top: 0; background: var(--white); z-index: 1;
-}
-.add-panel-header span { font-size: 15px; font-weight: 800; color: var(--brown); }
-.panel-close-btn { background: none; border: none; font-size: 18px; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
-
-.add-panel-body { padding: 14px 18px 28px; display: flex; flex-direction: column; gap: 10px; }
-
-.field-row { display: flex; gap: 10px; }
-.field-group { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-@media (max-width: 380px) {
-  .field-row { flex-direction: column; }
-}
-.field-group label { font-size: 11px; font-weight: 700; color: var(--brown); text-transform: uppercase; letter-spacing: 0.5px; }
-.field-group .optional { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 10px; }
-.field-group input, .field-group select {
-  padding: 9px 11px;
-  border-radius: 9px;
-  border: 1.5px solid var(--border);
-  font-size: 16px;
-  color: var(--text);
-  background: var(--white);
-  outline: none;
-  transition: border-color 0.15s;
-  -webkit-appearance: none;
-}
-.field-group input:focus, .field-group select:focus { border-color: var(--gold); }
-.field-group select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23351C15' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 11px center;
-  padding-right: 30px;
-}
-
-/* ── Phone rows editor (multi-number, drag-to-reorder) ── */
-.phone-rows { display: flex; flex-direction: column; gap: 8px; }
-.phone-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 5px 6px;
-}
-.phone-row-primary { border-color: var(--gold); background: var(--gold-light); }
-.phone-row-handle {
-  touch-action: none;          /* stops page scroll while dragging on touch */
-  cursor: grab;
-  border: none;
-  background: none;
-  font-size: 19px;
-  line-height: 1;
-  color: var(--muted);
-  padding: 8px 5px;
-  flex-shrink: 0;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.phone-row-dragging {
-  opacity: 0.9;
-  box-shadow: var(--shadow-lg);
-  border-color: var(--gold);
-  position: relative;
-  z-index: 10;
-}
-.phone-row-dragging .phone-row-handle { cursor: grabbing; }
-.phone-row-num { flex: 1.7; min-width: 0; }
-.phone-row-label { flex: 1; min-width: 0; }
-.phone-row .phone-row-num,
-.phone-row .phone-row-label {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1.5px solid var(--border);
-  font-size: 16px;
-  color: var(--text);
-  background: var(--white);
-  outline: none;
-  -webkit-appearance: none;
-  transition: border-color 0.15s;
-}
-.phone-row .phone-row-num:focus,
-.phone-row .phone-row-label:focus { border-color: var(--gold); }
-.phone-row-remove {
-  border: none;
-  background: none;
-  color: var(--muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 8px 5px;
-  flex-shrink: 0;
-  border-radius: 6px;
-}
-.phone-row-remove:active { color: var(--danger); }
-.btn-add-phone {
-  margin-top: 8px;
-  width: 100%;
-  padding: 9px;
-  border-radius: 9px;
-  border: 1.5px dashed var(--border);
-  background: none;
-  color: var(--brown-mid);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.btn-add-phone:active { background: var(--brown-light); }
-
-.panel-actions { display: flex; gap: 8px; margin-top: 4px; }
-.btn-cancel {
-  flex: 1; padding: 11px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border);
-  background: var(--white); color: var(--muted);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-}
-.btn-save {
-  flex: 2; padding: 11px;
-  border-radius: 10px; border: none;
-  background: var(--brown); color: var(--gold);
-  font-size: 14px; font-weight: 800; cursor: pointer;
-  transition: filter 0.1s;
-}
-.btn-save:active { filter: brightness(1.2); }
-.panel-note { font-size: 12px; color: var(--brown-mid); font-style: italic; min-height: 16px; text-align: center; }
-
-/* ── Delete Confirmation Modal ── */
-.modal-backdrop {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(53,28,21,0.55);
-  z-index: 400;
-  align-items: center; justify-content: center;
-  backdrop-filter: blur(3px);
-}
-.modal-backdrop.open { display: flex; }
-/* The delete-confirmation modal can be triggered from inside another open
-   modal (e.g. deleting a driver from the Retired Drivers list) — it's built
-   and inserted into the page later than the others, so at equal z-index it
-   would otherwise render UNDER whichever modal is already open. Always keep
-   it on top. */
-#deleteModal { z-index: 500; }
-.modal {
-  background: var(--white);
-  border-radius: 18px;
-  padding: 28px 24px 22px;
-  max-width: 320px; width: 90%;
-  box-shadow: 0 8px 32px rgba(53,28,21,0.25);
-  text-align: center;
-  border-top: 4px solid var(--danger);
-}
-.modal-icon { font-size: 32px; margin-bottom: 10px; }
-.modal-title { font-size: 18px; font-weight: 800; color: var(--brown); margin-bottom: 8px; }
-.modal-body { font-size: 14px; color: #2a1408; margin-bottom: 20px; line-height: 1.5; font-weight: 500; }
-.modal-actions { display: flex; gap: 10px; }
-.btn-modal-cancel {
-  flex: 1; padding: 11px;
-  border-radius: 10px;
-  border: 1.5px solid var(--border);
-  background: var(--white); color: var(--muted);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-}
-.btn-delete-confirm {
-  flex: 2; padding: 11px;
-  border-radius: 10px; border: none;
-  background: var(--danger); color: var(--white);
-  font-size: 14px; font-weight: 800; cursor: pointer;
-  transition: filter 0.1s;
-}
-.btn-delete-confirm:active { filter: brightness(0.88); }
-
-/* ============================================================
-   Dark Mode
-   ============================================================ */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --brown:        #f0c060;
-    --brown-dark:   #ffe082;
-    --brown-mid:    #c9a86c;
-    --brown-light:  #2a1f18;
-    --gold:         #FFB500;
-    --gold-dark:    #cc8f00;
-    --gold-light:   #2c2200;
-    --grenc-bg:     #1e3a5f;
-    --grenc-fg:     #93c5fd;
-    --mebnc-bg:     #14391f;
-    --mebnc-fg:     #6ee7a0;
-    --text:         #f0e8e0;
-    --muted:        #a08878;
-    --border:       #3d2a22;
-    --bg:           #1a1008;
-    --white:        #1e1410;
-    --danger:       #f87171;
-    --danger-bg:    #3f1515;
-    --shadow:       0 1px 4px rgba(0,0,0,0.40);
-    --shadow-lg:    0 4px 18px rgba(0,0,0,0.55);
-  }
-
-  body { background: #000; }
-
-  /* Gate card */
-  .gate-card { background: #1e1410; border-top-color: var(--gold); box-shadow: 0 8px 40px rgba(0,0,0,0.7); }
-  .gate-title { color: var(--gold); }
-  .gate-input { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
-  .gate-input:focus { border-color: var(--gold); }
-  .gate-btn { background: #351C15; color: var(--gold); }
-  .gate-bio-btn { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
-  .gate-bio-btn:active { background: #3d2a22; }
-
-  /* Header */
-  .header { background: #1a0e08; border-bottom-color: var(--gold); }
-  #searchBox { background: rgba(255,255,255,0.06); color: #f0e8e0; border-color: rgba(255,181,0,0.3); }
-  #searchBox::placeholder { color: rgba(255,255,255,0.35); }
-  #searchBox:focus { background: rgba(255,255,255,0.10); border-color: var(--gold); }
-
-  /* Cards */
-  .card { background: #fdf3d0; border-left-color: var(--gold); }
-  .card .name { color: #351C15; }
-  .card .phone-btn.text-primary,
-  .card .phone-btn.call-alt,
-  .card .phone-btn.text-alt { background: #f5e8a0; color: #351C15; border-color: #e0c84a; }
-  .card .alt-tag { background: rgba(53,28,21,0.10); color: #351C15; }
-  .card .no-phone { color: #7a6055; }
-  .card .btn-edit { background: #f0d060; color: #351C15; }
-  .card .card-actions { border-top-color: #e0c84a; }
-  .name { color: #f0c060; }
-  .card-avatar-placeholder { background: #2a1f18; border-color: #3d2a22; }
-  .phone-btn.call-primary { background: var(--gold); color: #1a0800; }
-  .phone-btn.text-primary,
-  .phone-btn.call-alt,
-  .phone-btn.text-alt   { background: #2a1f18; color: #d4b896; border-color: #3d2a22; }
-  .phone-btn.phone-plain-primary { background: var(--gold); color: #1a0800; }
-  .alt-tag { background: rgba(255,255,255,0.08); color: #c9a86c; }
-  .no-phone { color: var(--muted); }
-  .btn-edit { background: #2c2200; color: #f0c060; }
-  .card-selected .card { border-left-color: var(--danger); background: var(--danger-bg); }
-  .card-selected .card .name { color: var(--danger); }
-
-  /* Panels */
-  .add-panel { background: #1e1410; }
-  .add-panel-header { background: #1e1410; border-bottom-color: var(--gold); }
-  .add-panel-header span { color: var(--gold); }
-  .panel-close-btn { color: var(--muted); }
-  .field-group label { color: #f0c060; }
-  .field-group input,
-  .field-group select { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
-  .field-group input:focus,
-  .field-group select:focus { border-color: var(--gold); }
-  .phone-row { background: #16100c; border-color: #3d2a22; }
-  .phone-row-primary { background: #2c2200; border-color: var(--gold); }
-  .phone-row .phone-row-num,
-  .phone-row .phone-row-label { background: #2a1f18; color: #f0e8e0; border-color: #3d2a22; }
-  .phone-row .phone-row-num:focus,
-  .phone-row .phone-row-label:focus { border-color: var(--gold); }
-  .btn-add-phone { border-color: #3d2a22; color: #c9a86c; }
-  .btn-add-phone:active { background: #2a1f18; }
-  .btn-cancel { background: #1e1410; color: var(--muted); border-color: #3d2a22; }
-  .btn-save { background: #351C15; color: var(--gold); }
-  .panel-note { color: #c9a86c; }
-  .panel-overlay { background: rgba(0,0,0,0.65); }
-
-  /* Modals */
-  .modal { background: #1e1410; }
-  .modal-title { color: var(--gold); }
-  .modal-body { color: #f0d090; }
-  .btn-modal-cancel { background: #1e1410; color: var(--muted); border-color: #3d2a22; }
-
-  /* Import modal */
-  #importModal .modal { border-top-color: #f0c060; }
-  #importStatus { color: #f0d090; font-weight: 600; }
-  #importUpdateLog { background: #2a1f18; color: #f0c060; }
-  #importLogEntries > div { border-bottom-color: #3d2a22; }
-
-  /* No results */
-  #noResults { color: var(--muted); }
-
-  /* Phone action sheet */
-  #phoneActionSheet > div { background: #1e1410; }
-  #phoneActionSheet p { color: var(--gold); }
-
-  /* Import preview */
-  #importPreviewBody { background: #2a1f18; color: #c9a86c; }
-}
-
-/* ============================================================
-   DESKTOP LAYOUT — added block, desktop only (≥1024px)
-   Nothing above this line was changed. The two desktop-only
-   elements are hidden on mobile right here, so phones and
-   tablets render exactly as before.
-   ============================================================ */
-.desktop-sidebar, .desktop-table-wrap { display: none; }
-
-/* ── Admin bar: Seed DB / Import / Export JSON were setup/migration
-      tools. Admin edits now write straight to the live database, so
-      these are retired everywhere (mobile and desktop) — kept hidden
-      rather than removed from the HTML, since app.js still looks
-      them up (getElementById + addEventListener) during startup and
-      an actually-missing element there would throw. ── */
-#btnSeedDb, #btnImport, #btnExport { display: none !important; }
-
-@media (min-width: 1024px) {
-
-  body { overflow: hidden; }
-
-  /* App becomes a sidebar + content grid once unlocked.
-     (app.js sets display:block inline when the gate opens —
-     this selector upgrades that to grid without touching JS.) */
-  #appWrapper[style*="block"] {
-    display: grid !important;
-    grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    height: 100vh;
-  }
-
-  /* ── Sidebar ── */
-  .desktop-sidebar {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-    display: flex;
-    flex-direction: column;
-    background: var(--white);
-    border-right: 1px solid var(--border);
-    overflow-y: auto;
-    position: relative; z-index: 110;
-  }
-  .ds-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-  .ds-heading {
-    font-size: 11px; font-weight: 800; color: var(--brown);
-    text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px;
-  }
-  .ds-search {
-    width: 100%; padding: 10px 12px;
-    border: 1.5px solid var(--border); border-radius: 9px;
-    font-size: 14px; color: var(--text); background: var(--white);
-    outline: none; transition: border-color 0.15s;
-    -webkit-appearance: none;
-  }
-  .ds-search:focus { border-color: var(--gold); }
-  .ds-label {
-    display: block; font-size: 11px; font-weight: 800; color: var(--brown);
-    text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;
-  }
-  .ds-filter {
-    display: block; width: 100%; text-align: left;
-    padding: 8px 10px; margin-bottom: 4px;
-    background: none; border: 1.5px solid transparent; border-radius: 8px;
-    font-size: 13px; font-weight: 600; color: var(--brown-mid);
-    cursor: pointer; transition: background 0.15s, border-color 0.15s;
-  }
-  .ds-filter:hover { background: var(--brown-light); }
-  .ds-filter.active { background: var(--gold-light); border-color: var(--gold); color: var(--brown); }
-  .ds-spacer { flex: 1; border-bottom: none; }
-  .ds-bottom { border-bottom: none; border-top: 1px solid var(--border); }
-  .ds-add {
-    width: 100%; padding: 12px;
-    background: var(--gold); color: #1e0f0b; /* hardcoded near-black — var(--brown-dark) flips light in dark mode */
-    border: none; border-radius: 9px;
-    font-size: 14px; font-weight: 800; cursor: pointer;
-    transition: background 0.15s;
-  }
-  .ds-add:hover { background: var(--gold-dark); }
-
-  /* ── Header spans the content column; its search + filters move
-        to the sidebar (the originals stay in the DOM, just hidden,
-        so app.js keeps working unchanged) ── */
-  .header { grid-column: 2; grid-row: 1; }
-  .header .search-row,
-  .header .filter-btns { display: none; }
-  .header-sub-mobile  { display: none; }
-  .header-sub-desktop { display: inline; }
-
-  /* ── Table replaces the card list; fab replaced by sidebar button ── */
-  #cardList { display: none; }
-  .fab { display: none !important; } /* !important: app.js sets it inline for admins */
-
-  .desktop-table-wrap {
-    display: block;
-    grid-column: 2;
-    grid-row: 2;
-    overflow-y: auto;
-    padding: 20px 24px 40px;
-  }
-  .desktop-table {
-    width: 100%;
-    border-collapse: separate; border-spacing: 0;
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-  }
-  .desktop-table th {
-    position: sticky; top: 0; z-index: 5;
-    background: #351C15; color: #FFB500; /* hardcoded — var(--brown) flips to a light gold in dark mode, which made this unreadable */
-    text-align: left;
-    font-size: 11px; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    padding: 12px 16px;
-  }
-  .dt-th-actions { text-align: right; }
-  .desktop-table td {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    font-size: 14px; color: var(--text);
-    vertical-align: middle;
-    background: var(--white);
-  }
-  .desktop-table tbody tr:last-child td { border-bottom: none; }
-  .desktop-table tbody tr:hover td { background: var(--brown-light); }
-  .dt-name {
-    background: none; border: none; padding: 0; margin: 0;
-    font-size: 14px; font-weight: 700; color: var(--brown);
-    cursor: pointer; font-family: inherit; text-align: left;
-  }
-  .dt-name:hover { text-decoration: underline; }
-  .dt-phone {
-    background: none; border: none; padding: 0;
-    font-size: 14px; font-weight: 700; color: var(--gold-dark);
-    cursor: pointer; font-family: inherit;
-  }
-  .dt-phone:hover { text-decoration: underline; }
-  .dt-tag, .dt-more {
-    display: inline-block; margin-left: 8px;
-    background: var(--brown-light); color: var(--brown-mid);
-    border-radius: 5px; padding: 2px 7px;
-    font-size: 11px; font-weight: 700;
-  }
-  .dt-muted { color: var(--muted); }
-  .dt-updated {
-    font-size: 11px; color: var(--muted); white-space: nowrap;
-    font-style: italic;
-  }
-  .dt-loc span {
-    display: inline-block;
-    background: var(--gold-light); color: var(--brown);
-    border: 1px solid var(--gold);
-    border-radius: 6px; padding: 3px 9px;
-    font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
-  }
-  .dt-actions { text-align: right; }
-  .dt-edit {
-    background: none;
-    border: 1.5px solid var(--border);
-    border-radius: 8px; padding: 6px 16px;
-    font-size: 12px; font-weight: 700; color: var(--brown);
-    cursor: pointer; transition: border-color 0.15s, background 0.15s;
-  }
-  .dt-edit:hover { border-color: var(--gold); background: var(--gold-light); }
-  .dt-empty {
-    display: none;
-    text-align: center; color: var(--muted);
-    font-size: 14px; padding: 40px 0;
-  }
-
-  /* ── The Add/Edit panel becomes a centered modal on desktop.
-        Same panel, same fields, same drag-to-reorder phone rows —
-        only its position changes. ── */
-  .add-panel {
-    top: 50%; left: 50%; right: auto; bottom: auto;
-    width: 620px; max-width: 92vw; max-height: 88vh;
-    border-radius: 16px;
-    transform: translate(-50%, -46%) scale(0.97);
-    opacity: 0; pointer-events: none;
-    transition: transform 0.22s ease, opacity 0.22s ease;
-  }
-  .add-panel.open {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1; pointer-events: auto;
-  }
-
-  /* Stacked "Other Numbers" cell — every extra number gets its own line,
-     so a driver with 3, 4, or 5 numbers is always fully visible. */
-  .dt-other-line { margin-bottom: 4px; }
-  .dt-other-line:last-child { margin-bottom: 0; }
-
-  /* ── Widen the small confirmation / list popups (Delete, Import,
-        List Cleanup, Import Preview, Retired Drivers) — they ship with
-        mobile widths (380–460px) set inline, so !important is required
-        to widen them here without touching the mobile styles. ── */
-  .modal-backdrop .modal { max-width: 640px !important; }
-
-  /* Retired Drivers list: 2-column grid instead of one long mobile-width
-     column, so the popup actually uses the desktop screen. */
-  #retiredList {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    max-height: 65vh !important;
-  }
-  #retiredList > div {
-    border-bottom: none !important;
-    background: var(--bg);
-    border-radius: 10px;
-    padding: 10px 12px !important;
-  }
-
-  /* ── Driver card popup — opened by clicking a name or a phone number
-        in the table. Shows a clean, readable card; clicking a number
-        inside it opens the real Call/Text/Copy/Save sheet. Built with
-        the same theme-aware variables as the rest of the app, so it
-        (unlike the older, always-light action sheet) looks right in
-        dark mode too. ── */
-  .dt-card-backdrop {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.55);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 500;
-  }
-  .dt-card-modal {
-    position: relative;
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
-    width: 420px; max-width: 90vw;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding: 30px 24px 22px;
-  }
-  .dt-card-close {
-    position: absolute; top: 12px; right: 12px;
-    background: none; border: none;
-    font-size: 15px; color: var(--muted);
-    cursor: pointer; padding: 8px; line-height: 1;
-  }
-  .dt-card-close:hover { color: var(--brown); }
-  .dt-card-head { text-align: center; margin-bottom: 22px; }
-  .dt-card-name { font-size: 21px; font-weight: 800; color: var(--brown); margin-bottom: 10px; }
-  .dt-card-badge {
-    display: inline-block;
-    background: var(--gold-light); color: var(--brown);
-    border: 1px solid var(--gold);
-    border-radius: 6px; padding: 3px 10px;
-    font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
-  }
-  .dt-card-phones { display: flex; flex-direction: column; gap: 10px; }
-  .dt-card-phone-row {
-    display: flex; align-items: center; gap: 10px;
-    width: 100%;
-    background: var(--bg);
-    border: 1.5px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  .dt-card-phone-row:hover { border-color: var(--gold); background: var(--gold-light); }
-  .dt-card-phone-primary { border-color: var(--gold); background: var(--gold-light); }
-  .dt-card-phone-num { font-size: 16px; font-weight: 800; color: var(--gold-dark); }
-  .dt-card-phone-tag {
-    background: var(--brown-light); color: var(--brown-mid);
-    border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 700;
-  }
-  .dt-card-phone-primary-label {
-    font-size: 10px; font-weight: 800; letter-spacing: 0.4px;
-    color: var(--gold-dark); text-transform: uppercase;
-  }
-  .dt-card-phone-hint {
-    margin-left: auto;
-    font-size: 11px; font-weight: 700; color: var(--muted);
-    white-space: nowrap;
-  }
-  .dt-card-phone-row:hover .dt-card-phone-hint { color: var(--brown); }
-  .dt-card-none { text-align: center; color: var(--muted); font-size: 13px; padding: 12px 0; }
-}
+  <!-- SheetJS for Excel parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script type="module" src="app.js?v=3"></script>
+  <script src="desktop.js?v=1" defer></script>
+</body>
+</html>
