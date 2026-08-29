@@ -65,21 +65,27 @@
     tdName.textContent = nameEl ? nameEl.textContent : '';
     tr.appendChild(tdName);
 
-    // Primary phone + second number
+    // Primary phone + every other number on file (each its own line,
+    // so a driver with 3, 4 or 5 numbers is fully visible — no popover
+    // or "+N more" needed).
     var groups = outer.querySelectorAll('.phone-group');
     var tdP1 = document.createElement('td');
     fillPhoneCell(tdP1, groups[0] || null);
     tr.appendChild(tdP1);
 
-    var tdP2 = document.createElement('td');
-    fillPhoneCell(tdP2, groups[1] || null);
-    if (groups.length > 2) {
-      var more = document.createElement('span');
-      more.className = 'dt-more';
-      more.textContent = '+' + (groups.length - 2) + ' more';
-      tdP2.appendChild(more);
+    var tdOther = document.createElement('td');
+    if (groups.length > 1) {
+      for (var k = 1; k < groups.length; k++) {
+        var line = document.createElement('div');
+        line.className = 'dt-other-line';
+        fillPhoneCell(line, groups[k]);
+        tdOther.appendChild(line);
+      }
+    } else {
+      tdOther.textContent = '—';
+      tdOther.className = 'dt-muted';
     }
-    tr.appendChild(tdP2);
+    tr.appendChild(tdOther);
 
     // Location badge
     var tdLoc = document.createElement('td');
