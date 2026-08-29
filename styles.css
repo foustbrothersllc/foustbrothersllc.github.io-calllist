@@ -147,6 +147,10 @@ body {
 .header-title { flex: 1; }
 .header-title h1 { font-size: 17px; font-weight: 800; color: var(--gold); line-height: 1.1; }
 .header-sub { font-size: 11px; color: rgba(255,255,255,0.55); font-weight: 400; letter-spacing: 0.4px; text-transform: uppercase; }
+/* Two subtitle variants share .header-sub's styling — mobile keeps the
+   original text; desktop (≥1024px, see media block below) swaps to a
+   more suitable one. Default here is mobile: only .header-sub-mobile shows. */
+.header-sub-desktop { display: none; }
 
 .btn-header-icon {
   background: none;
@@ -602,6 +606,12 @@ body {
   backdrop-filter: blur(3px);
 }
 .modal-backdrop.open { display: flex; }
+/* The delete-confirmation modal can be triggered from inside another open
+   modal (e.g. deleting a driver from the Retired Drivers list) — it's built
+   and inserted into the page later than the others, so at equal z-index it
+   would otherwise render UNDER whichever modal is already open. Always keep
+   it on top. */
+#deleteModal { z-index: 500; }
 .modal {
   background: var(--white);
   border-radius: 18px;
@@ -828,6 +838,8 @@ body {
   .header { grid-column: 2; grid-row: 1; }
   .header .search-row,
   .header .filter-btns { display: none; }
+  .header-sub-mobile  { display: none; }
+  .header-sub-desktop { display: inline; }
 
   /* ── Table replaces the card list; fab replaced by sidebar button ── */
   #cardList { display: none; }
@@ -886,6 +898,10 @@ body {
     font-size: 11px; font-weight: 700;
   }
   .dt-muted { color: var(--muted); }
+  .dt-updated {
+    font-size: 11px; color: var(--muted); white-space: nowrap;
+    font-style: italic;
+  }
   .dt-loc span {
     display: inline-block;
     background: var(--gold-light); color: var(--brown);
