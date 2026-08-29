@@ -1145,10 +1145,15 @@ function initApp() {
   }
   function applyFilter() {
     const query = searchBox.value.toLowerCase().trim();
+    // Match each typed word independently (order-insensitive) instead of one
+    // exact-phrase substring check — dataset.search stores "lastname firstname
+    // ...", so typing a first name then a last name ("Jacob Foust") used to
+    // never match "foust jacob ..." and silently blanked the list.
+    const queryWords = query ? query.split(/\s+/).filter(Boolean) : [];
     let visible = 0;
     allCards.forEach(function(outer) {
       const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
-      const textMatch = !query || outer.dataset.search.includes(query);
+      const textMatch = queryWords.length === 0 || queryWords.every(function(w) { return outer.dataset.search.includes(w); });
       const show = locMatch && textMatch;
       outer.style.display = show ? '' : 'none';
       if (show) visible++;
