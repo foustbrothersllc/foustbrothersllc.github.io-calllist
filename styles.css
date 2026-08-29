@@ -807,7 +807,7 @@ body {
   .ds-bottom { border-bottom: none; border-top: 1px solid var(--border); }
   .ds-add {
     width: 100%; padding: 12px;
-    background: var(--gold); color: var(--brown-dark);
+    background: var(--gold); color: #1e0f0b; /* hardcoded near-black — var(--brown-dark) flips light in dark mode */
     border: none; border-radius: 9px;
     font-size: 14px; font-weight: 800; cursor: pointer;
     transition: background 0.15s;
@@ -843,7 +843,7 @@ body {
   }
   .desktop-table th {
     position: sticky; top: 0; z-index: 5;
-    background: var(--brown); color: var(--gold);
+    background: #351C15; color: #FFB500; /* hardcoded — var(--brown) flips to a light gold in dark mode, which made this unreadable */
     text-align: left;
     font-size: 11px; font-weight: 800;
     text-transform: uppercase; letter-spacing: 0.5px;
@@ -910,4 +910,36 @@ body {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1; pointer-events: auto;
   }
+
+  /* Stacked "Other Numbers" cell — every extra number gets its own line,
+     so a driver with 3, 4, or 5 numbers is always fully visible. */
+  .dt-other-line { margin-bottom: 4px; }
+  .dt-other-line:last-child { margin-bottom: 0; }
+
+  /* ── Widen the small confirmation / list popups (Delete, Import,
+        List Cleanup, Import Preview, Retired Drivers) — they ship with
+        mobile widths (380–460px) set inline, so !important is required
+        to widen them here without touching the mobile styles. ── */
+  .modal-backdrop .modal { max-width: 640px !important; }
+
+  /* Retired Drivers list: 2-column grid instead of one long mobile-width
+     column, so the popup actually uses the desktop screen. */
+  #retiredList {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    max-height: 65vh !important;
+  }
+  #retiredList > div {
+    border-bottom: none !important;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 10px 12px !important;
+  }
+
+  /* ── Admin bar: Seed DB / Import / Export JSON were setup/migration
+        tools. Since admin edits now write straight to the live database,
+        hide them on desktop to cut clutter. (Mobile is untouched — they
+        still show there.) ── */
+  #btnSeedDb, #btnImport, #btnExport { display: none !important; }
 }
