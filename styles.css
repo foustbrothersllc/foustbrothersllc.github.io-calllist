@@ -625,6 +625,24 @@ body {
 .modal-title { font-size: 18px; font-weight: 800; color: var(--brown); margin-bottom: 8px; }
 .modal-body { font-size: 14px; color: #2a1408; margin-bottom: 20px; line-height: 1.5; font-weight: 500; }
 .modal-actions { display: flex; gap: 10px; }
+.import-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 26px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.import-dropzone:hover, .import-dropzone:focus-visible {
+  border-color: var(--gold);
+  outline: none;
+}
+.import-dropzone.dragover { border-color: var(--gold); background: var(--gold-light); }
+.import-dropzone.has-file { border-style: solid; border-color: var(--gold-dark); }
+.import-dropzone-icon { color: var(--muted); margin-bottom: 8px; }
+.import-dropzone-icon svg { display: block; margin: 0 auto; }
+.import-dropzone-text { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.import-dropzone.has-file .import-dropzone-text { color: var(--text); font-weight: 700; }
 .btn-modal-cancel {
   flex: 1; padding: 11px;
   border-radius: 10px;
