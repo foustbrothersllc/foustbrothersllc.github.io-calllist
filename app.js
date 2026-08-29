@@ -484,6 +484,8 @@ function initApp() {
   const importCancel    = document.getElementById('importCancel');
   const importConfirm   = document.getElementById('importConfirm');
   const importFileInput = document.getElementById('importFileInput');
+  const importDropzone     = document.getElementById('importDropzone');
+  const importDropzoneText = document.getElementById('importDropzoneText');
   const importStatus    = document.getElementById('importStatus');
   const importProgressWrap = document.getElementById('importProgressWrap');
   const importProgressBar  = document.getElementById('importProgressBar');
@@ -2238,8 +2240,39 @@ function initApp() {
   }
 
   // ── Import modal ─────────────────────────────────────────────
+  const IMPORT_DROPZONE_DEFAULT_TEXT = 'Drag a .csv, .xlsx, or .json file here, or tap to browse';
+  function setImportDropzoneFile(filename) {
+    if (filename) {
+      importDropzoneText.textContent = '📄 ' + filename + ' — ready to import';
+      importDropzone.classList.add('has-file');
+    } else {
+      importDropzoneText.textContent = IMPORT_DROPZONE_DEFAULT_TEXT;
+      importDropzone.classList.remove('has-file');
+    }
+  }
+  importDropzone.addEventListener('click', function() { importFileInput.click(); });
+  importDropzone.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); importFileInput.click(); }
+  });
+  importDropzone.addEventListener('dragover', function(e) { e.preventDefault(); importDropzone.classList.add('dragover'); });
+  importDropzone.addEventListener('dragleave', function() { importDropzone.classList.remove('dragover'); });
+  importDropzone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    importDropzone.classList.remove('dragover');
+    const dropped = e.dataTransfer && e.dataTransfer.files;
+    if (dropped && dropped.length) {
+      importFileInput.files = dropped;
+      setImportDropzoneFile(dropped[0].name);
+    }
+  });
+  importFileInput.addEventListener('change', function() {
+    const f = importFileInput.files && importFileInput.files[0];
+    setImportDropzoneFile(f ? f.name : null);
+  });
+
   function openImportModal() {
     importFileInput.value = '';
+    setImportDropzoneFile(null);
     importStatus.textContent = '';
     importConfirm.disabled = false;
     importConfirm.textContent = 'Import';
