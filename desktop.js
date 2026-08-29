@@ -257,6 +257,20 @@
     }
     tr.appendChild(tdLoc);
 
+    // Last edited — mirrors the "Updated: ..." line the mobile card shows
+    // (app.js only sets this once a driver has been saved at least once
+    // since the feature existed, so older untouched records show "—").
+    var tdUpdated = document.createElement('td');
+    var updatedEl = outer.querySelector('.card > p');
+    if (updatedEl && updatedEl.textContent) {
+      tdUpdated.textContent = updatedEl.textContent.replace(/^Updated:\s*/, '');
+      tdUpdated.className = 'dt-updated';
+    } else {
+      tdUpdated.textContent = '—';
+      tdUpdated.className = 'dt-muted';
+    }
+    tr.appendChild(tdUpdated);
+
     // Edit (right-aligned; only exists when admin is logged in,
     // because the card only has an Edit button for admins)
     var tdEdit = document.createElement('td');
