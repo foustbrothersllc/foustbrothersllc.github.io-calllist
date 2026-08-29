@@ -829,14 +829,6 @@ body {
   .header .search-row,
   .header .filter-btns { display: none; }
 
-  /* ── The title/subtitle and "Showing X of Y drivers" count are
-        redundant on desktop (sidebar already shows search + filter
-        state) — hide the text, keep the admin login/logout buttons
-        working and right-aligned in the now-empty row ── */
-  .header .header-title,
-  .header .count-bar { display: none; }
-  .header .header-top { justify-content: flex-end; margin-bottom: 0; }
-
   /* ── Table replaces the card list; fab replaced by sidebar button ── */
   #cardList { display: none; }
   .fab { display: none !important; } /* !important: app.js sets it inline for admins */
@@ -894,6 +886,10 @@ body {
     font-size: 11px; font-weight: 700;
   }
   .dt-muted { color: var(--muted); }
+  .dt-updated {
+    font-size: 11px; color: var(--muted); white-space: nowrap;
+    font-style: italic;
+  }
   .dt-loc span {
     display: inline-block;
     background: var(--gold-light); color: var(--brown);
