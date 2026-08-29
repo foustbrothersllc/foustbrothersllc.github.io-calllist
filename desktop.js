@@ -44,9 +44,31 @@
     return true;
   }
 
+  // Same clipboard approach app.js itself uses for its "Copy Number" button.
+  function copyToClipboard(text, onDone) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onDone).catch(function () {
+        fallbackCopy(text); onDone();
+      });
+    } else {
+      fallbackCopy(text);
+      onDone();
+    }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+  }
+
   // ── Driver card popup (readable view; opened from a name or number
-  //    click). Phone rows inside it proxy to the real card's phone
-  //    button, which is what actually opens the Call/Text/Copy sheet. ──
+  //    click). On desktop there's no dialer/SMS app to hand off to, so
+  //    clicking a phone row here just copies the number — no Call/Text/
+  //    Copy/Save sheet like mobile shows. ──
   function closeCardPopup() {
     var el = $('dtCardPopup');
     if (el) el.remove();
@@ -105,11 +127,11 @@
       (function (group, isPrimary) {
         var numEl  = group.querySelector('.phone-number');
         var tagEl  = group.querySelector('.alt-tag');
-        var origBtn = group.querySelector('.phone-btn');
 
         var row = document.createElement('button');
         row.type = 'button';
         row.className = 'dt-card-phone-row' + (isPrimary ? ' dt-card-phone-primary' : '');
+        row.title = 'Click to copy number';
 
         var num = document.createElement('span');
         num.className = 'dt-card-phone-num';
@@ -129,8 +151,19 @@
           row.appendChild(pl);
         }
 
+        var hint = document.createElement('span');
+        hint.className = 'dt-card-phone-hint';
+        hint.textContent = '📋 Copy';
+        row.appendChild(hint);
+
+        // Desktop has no dialer/SMS app to hand off to, so — unlike mobile —
+        // a click here just copies the number. No Call/Text/Copy/Save sheet.
         row.addEventListener('click', function () {
-          if (origBtn) origBtn.click(); // opens the real Call/Text/Copy/Save sheet
+          var text = num.textContent;
+          copyToClipboard(text, function () {
+            hint.textContent = '✅ Copied';
+            setTimeout(function () { hint.textContent = '📋 Copy'; }, 1400);
+          });
         });
         list.appendChild(row);
       })(groups[i], i === 0);
