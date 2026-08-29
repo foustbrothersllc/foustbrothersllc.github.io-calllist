@@ -923,7 +923,7 @@ function initApp() {
       });
       selectedKeys.clear();
       updateBulkBar();
-      applyFilter(); filterTable();
+      applyFilter();
       deleteModal.classList.remove('open');
       cleanup();
     }
@@ -1027,7 +1027,7 @@ function initApp() {
     const savedDriver = { ...driver };
     if (outer) animateRemove(outer);
     allCards = allCards.filter(c => c !== outer);
-    applyFilter(); filterTable();
+    applyFilter();
 
     showUndoToast(
       '🗑 ' + savedDriver.lastName + ', ' + savedDriver.firstName + ' deleted',
@@ -1039,7 +1039,7 @@ function initApp() {
         driverSet.add(key);
         driverMap.set(key, savedDriver);
         upsertDriver(savedDriver);
-        applyFilter(); filterTable();
+        applyFilter();
       }
     );
   }
@@ -1075,14 +1075,14 @@ function initApp() {
       if (index < drivers.length) {
         requestAnimationFrame(renderBatch);
       } else {
-        applyFilter(); filterTable(); // run filter once all cards are in DOM
+        applyFilter(); // run filter once all cards are in DOM
       }
     }
 
     if (drivers.length > 0) {
       requestAnimationFrame(renderBatch);
     } else {
-      applyFilter(); filterTable();
+      applyFilter();
     }
   }
 
@@ -1143,80 +1143,7 @@ function initApp() {
     const ts = meta ? ' · Updated ' + meta.date : '';
     countBar.textContent = 'Showing ' + visible + ' of ' + allCards.length + ' drivers' + ts;
   }
-
-  // ── Desktop table rendering (renders alongside card list) ──
-  const tableBody = document.getElementById('driversTableBody');
-  let tableRows = [];
-
-  function renderTable(drivers) {
-    if (!tableBody) return; // element might not exist on mobile
-    
-    tableRows.forEach(r => r.remove());
-    tableRows = [];
-
-    drivers.forEach(function(driver) {
-      const row = document.createElement('tr');
-      row.dataset.key = driverKey(driver.lastName, driver.firstName);
-      row.dataset.location = (driver.location || '').toLowerCase();
-      row.dataset.search = ((driver.firstName + ' ' + driver.lastName + ' ' + (driver.tags || []).join(' ')).toLowerCase());
-
-      // Name
-      const nameCell = document.createElement('td');
-      nameCell.className = 'driver-name';
-      nameCell.textContent = driver.lastName + ', ' + driver.firstName;
-
-      // Primary phone
-      const phoneCell = document.createElement('td');
-      const primaryPhone = (driver.phones && driver.phones[0]) ? driver.phones[0].display : 'N/A';
-      phoneCell.innerHTML = '<span class="phone-badge">' + escapeHtml(primaryPhone) + '</span>';
-
-      // Phone count
-      const countCell = document.createElement('td');
-      countCell.textContent = (driver.phones || []).length;
-
-      // Labels
-      const labelsCell = document.createElement('td');
-      const labels = (driver.tags || []);
-      labelsCell.innerHTML = labels.map(function(tag) {
-        return '<span class="label-badge">' + escapeHtml(tag) + '</span>';
-      }).join('');
-
-      // Actions (Edit button)
-      const actionsCell = document.createElement('td');
-      const editBtn = document.createElement('button');
-      editBtn.className = 'btn-edit-driver';
-      editBtn.textContent = 'Edit';
-      editBtn.addEventListener('click', function() {
-        editDriver(driver);
-      });
-      actionsCell.appendChild(editBtn);
-
-      row.appendChild(nameCell);
-      row.appendChild(phoneCell);
-      row.appendChild(countCell);
-      row.appendChild(labelsCell);
-      row.appendChild(actionsCell);
-
-      tableBody.appendChild(row);
-      tableRows.push(row);
-    });
-  }
-
-  function filterTable() {
-    if (!tableBody) return;
-    let visible = 0;
-    tableRows.forEach(function(row) {
-      const locMatch  = activeFilter === 'all' || row.dataset.location === activeFilter;
-      const textMatch = !searchQuery || row.dataset.search.includes(searchQuery);
-      const show = locMatch && textMatch;
-      row.style.display = show ? '' : 'none';
-      if (show) visible++;
-    });
-    updateCount(visible);
-  }
-
-    function applyFilter() {
-    searchQuery = searchBox.value.toLowerCase().trim();
+  function applyFilter() {
     const query = searchBox.value.toLowerCase().trim();
     let visible = 0;
     allCards.forEach(function(outer) {
@@ -1455,7 +1382,7 @@ function initApp() {
         const outer = listEl.querySelector('.card-outer[data-key="' + key + '"]');
         if (outer) animateRemove(outer);
         allCards = allCards.filter(function(c){ return c !== outer; });
-        applyFilter(); filterTable();
+        applyFilter();
         inputLocation.removeEventListener('change', onLocationChange);
         deleteModal.classList.remove('open'); deleteConfirm.textContent = origText;
         cleanup(); closePanel();
@@ -1608,7 +1535,7 @@ function initApp() {
           isAdmin = true;
           localStorage.setItem('dcl_admin', '1');
           showAdminControls();
-          renderCards(Array.from(driverMap.values())); renderTable(Array.from(driverMap.values()));
+          renderCards(Array.from(driverMap.values()));
         } else {
           errorEl.textContent = '\u274c Incorrect password.';
           pwInput.value = '';
@@ -1669,7 +1596,7 @@ function initApp() {
     isAdmin = false;
     localStorage.removeItem('dcl_admin');
     hideAdminControls();
-    renderCards(Array.from(driverMap.values())); renderTable(Array.from(driverMap.values()));
+    renderCards(Array.from(driverMap.values()));
   }
 
   // ── Import progress helpers ───────────────────────────────────
@@ -1905,7 +1832,7 @@ function initApp() {
           });
           const updated = normalizePhones(Object.assign({}, d, { phones: deduped, updatedAt: new Date().toLocaleString() }));
           try {
-            await saveDriverToFirestore(updated); driverMap.set(key, updated); upsertDriver(updated); applyFilter(); filterTable(); wrap.remove();
+            await saveDriverToFirestore(updated); driverMap.set(key, updated); upsertDriver(updated); applyFilter(); wrap.remove();
             sec1hdr.textContent = '🔁 Duplicate Number on One Contact (' + dupResults.querySelectorAll('[data-merge-row]').length + ')';
           } catch(e) { mergeBtn.disabled = false; mergeBtn.textContent = '🧹 Remove Duplicate'; alert('Failed: ' + e.message); }
         });
@@ -1990,7 +1917,7 @@ function initApp() {
       cacheDelete(keyToDocId(key));
     });
     window.__cleanupSelected = [];
-    applyFilter(); filterTable();
+    applyFilter();
     dupModal.classList.remove('open');
   }
 
@@ -2080,7 +2007,7 @@ function initApp() {
           const { error: err } = await supabase.from('drivers').upsert({ id: driver._docId, data: encrypted });
           if (err) { alert('Restore failed: ' + err.message); restoreBtn.disabled = false; restoreBtn.textContent = '↩ Restore'; return; }
           const rKey = driverKey(restored.lastName, restored.firstName);
-          driverSet.add(rKey); driverMap.set(rKey, restored); upsertDriver(restored); applyFilter(); filterTable();
+          driverSet.add(rKey); driverMap.set(rKey, restored); upsertDriver(restored); applyFilter();
           row.remove();
           if (rList.children.length === 0) rList.innerHTML = '<p style="color:#7a6055;font-size:13px;text-align:center;padding:20px;">No retired drivers on record.</p>';
         });
@@ -2555,14 +2482,14 @@ function initApp() {
     if (searchClearBtn) searchClearBtn.style.display = searchBox.value ? 'block' : 'none';
   }
 
-  searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); filterTable(); });
-  searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); filterTable(); });
+  searchBox.addEventListener('input', function() { updateClearBtn(); applyFilter(); });
+  searchBox.addEventListener('search', function() { updateClearBtn(); applyFilter(); });
 
   if (searchClearBtn) {
     searchClearBtn.addEventListener('click', function() {
       searchBox.value = '';
       updateClearBtn();
-      applyFilter(); filterTable();
+      applyFilter();
       searchBox.focus();
     });
   }
@@ -2578,7 +2505,7 @@ function initApp() {
         searchBox.value = '';
         updateClearBtn();
       }
-      applyFilter(); filterTable();
+      applyFilter();
     });
   });
   // (name order toggle moved to Settings modal)
@@ -2849,7 +2776,7 @@ function initApp() {
       if (drivers.length === 0) return; // nothing cached yet — wait for network
       removeLoadingMsg();
       // drivers is already sorted (pre-sorted on write) — no sort needed here
-      renderCards(drivers); renderTable(drivers);
+      renderCards(drivers);
       cacheRendered = true;
       firstSnapshot = false;
     });
@@ -2903,7 +2830,7 @@ function initApp() {
         // cachePutAll accepts raw Supabase rows — pass original data, not decrypted
         await cachePutAll(data || []);
         firstSnapshot = false;
-        renderCards(drivers); renderTable(drivers);
+        renderCards(drivers);
       })
       .catch(function() {
         // Timeout or network failure — cached drivers already visible from Step 1
@@ -2924,7 +2851,7 @@ function initApp() {
             if (outer) animateRemove(outer);
             allCards = allCards.filter(c => c !== outer);
             await cacheDelete(key);
-            applyFilter(); filterTable();
+            applyFilter();
           } else {
             // INSERT or UPDATE
             await cachePut(payload.new);
@@ -2939,7 +2866,7 @@ function initApp() {
             } else {
               upsertDriver(driver);
             }
-            applyFilter(); filterTable();
+            applyFilter();
           }
         }
       )

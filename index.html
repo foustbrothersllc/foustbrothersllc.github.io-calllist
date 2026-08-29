@@ -52,94 +52,54 @@
       </svg>
     </div>
 
-    <!-- Desktop Sidebar (hidden on mobile) -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <h3>🔍 Search & Filter</h3>
-        <input type="text" class="sidebar-search" id="sidebarSearch" placeholder="Search drivers...">
-      </div>
-      <div class="sidebar-filters" id="sidebarFilters">
-        <!-- Filters populated by JavaScript -->
-      </div>
-      <div class="sidebar-actions">
-        <button class="btn-add-driver" id="sidebarAddBtn">+ Add Driver</button>
-      </div>
-    </aside>
-
-    <!-- Main content wrapper (flex container on desktop) -->
-    <div class="main-wrapper">
-      <header class="header">
-        <div class="header-top">
-          <div class="header-title">
-            <h1>Driver Call List</h1>
-            <span class="header-sub">Click-to-Call Directory</span>
-          </div>
-          <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
-          <button id="btnAdminLogoutHeader" class="btn-header-icon" title="Admin logout" style="display:none;border-color:rgba(255,100,100,0.5);color:rgba(255,150,150,0.85);">🔓</button>
+    <header class="header">
+      <div class="header-top">
+        <div class="header-title">
+          <h1>Driver Call List</h1>
+          <span class="header-sub">Click-to-Call Directory</span>
         </div>
-
-        <div class="search-row">
-          <div class="search-wrap">
-            <input
-              type="search"
-              id="searchBox"
-              placeholder="Search by name or number…"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              aria-label="Search drivers"
-              inputmode="search"
-              readonly
-              onfocus="this.removeAttribute('readonly')"
-            >
-            <button id="searchClear" class="search-clear-btn" aria-label="Clear search" style="display:none">✕</button>
-          </div>
-        </div>
-
-        <div class="filter-btns" role="group" aria-label="Filter by location">
-          <button class="filter-btn active" data-loc="all">All</button>
-          <button class="filter-btn" data-loc="greensboro">GRENC</button>
-          <button class="filter-btn" data-loc="mebane">MEBNC</button>
-        </div>
-
-        <p class="count-bar" id="countBar" aria-live="polite"></p>
-
-        <!-- Admin bar (hidden by default) -->
-        <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
-          <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
-          <button id="btnImport"    class="btn-admin">📋 Import</button>
-          <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
-          <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
-          <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
-        </div>
-      </header>
-
-      <!-- Desktop Table Container (hidden on mobile) -->
-      <div class="drivers-container" id="driversTableContainer">
-        <table class="drivers-table" id="driversTable">
-          <thead>
-            <tr>
-              <th style="width:22%;">Name</th>
-              <th style="width:18%;">Primary Phone</th>
-              <th style="width:12%;">Phone Count</th>
-              <th style="width:30%;">Labels</th>
-              <th style="width:18%;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="driversTableBody">
-            <!-- Populated by JavaScript -->
-          </tbody>
-        </table>
+        <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
+        <button id="btnAdminLogoutHeader" class="btn-header-icon" title="Admin logout" style="display:none;border-color:rgba(255,100,100,0.5);color:rgba(255,150,150,0.85);">🔓</button>
       </div>
 
-      <!-- Mobile List (shown on mobile, hidden on desktop) -->
-      <main class="list" id="cardList">
-        <div id="noResults" role="status">No drivers found matching your search.</div>
-      </main>
-    </div>
+      <div class="search-row">
+        <div class="search-wrap">
+          <input
+            type="search"
+            id="searchBox"
+            placeholder="Search by name or number…"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Search drivers"
+            inputmode="search"
+            readonly
+            onfocus="this.removeAttribute('readonly')"
+          >
+          <button id="searchClear" class="search-clear-btn" aria-label="Clear search" style="display:none">✕</button>
+        </div>
+      </div>
 
-    <!-- Add / Edit Panel (mobile) / Modal (desktop) -->
+      <div class="filter-btns" role="group" aria-label="Filter by location">
+        <button class="filter-btn active" data-loc="all">All</button>
+        <button class="filter-btn" data-loc="greensboro">GRENC</button>
+        <button class="filter-btn" data-loc="mebane">MEBNC</button>
+      </div>
+
+      <p class="count-bar" id="countBar" aria-live="polite"></p>
+
+      <!-- Admin bar (hidden by default) -->
+      <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
+        <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
+        <button id="btnImport"    class="btn-admin">📋 Import</button>
+        <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
+        <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
+        <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
+      </div>
+    </header>
+
+    <!-- Add / Edit Panel -->
     <div class="add-panel" id="addPanel">
       <div class="add-panel-header">
         <span id="addPanelTitle">Add Driver</span>
@@ -263,6 +223,11 @@
 
     <!-- FAB -->
     <button class="fab" id="fabAdd" aria-label="Add driver" style="display:none"><span>+</span></button>
+
+    <!-- Card list -->
+    <main class="list" id="cardList">
+      <div id="noResults" role="status">No drivers found matching your search.</div>
+    </main>
 
   </div><!-- /#appWrapper -->
 
