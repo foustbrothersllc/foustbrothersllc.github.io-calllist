@@ -1009,9 +1009,14 @@ body {
     border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 700;
   }
   .dt-card-phone-primary-label {
-    margin-left: auto;
     font-size: 10px; font-weight: 800; letter-spacing: 0.4px;
     color: var(--gold-dark); text-transform: uppercase;
   }
+  .dt-card-phone-hint {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    white-space: nowrap;
+  }
+  .dt-card-phone-row:hover .dt-card-phone-hint { color: var(--brown); }
   .dt-card-none { text-align: center; color: var(--muted); font-size: 13px; padding: 12px 0; }
 }
