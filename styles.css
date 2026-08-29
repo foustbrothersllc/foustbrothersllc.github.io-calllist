@@ -752,6 +752,14 @@ body {
    ============================================================ */
 .desktop-sidebar, .desktop-table-wrap { display: none; }
 
+/* ── Admin bar: Seed DB / Import / Export JSON were setup/migration
+      tools. Admin edits now write straight to the live database, so
+      these are retired everywhere (mobile and desktop) — kept hidden
+      rather than removed from the HTML, since app.js still looks
+      them up (getElementById + addEventListener) during startup and
+      an actually-missing element there would throw. ── */
+#btnSeedDb, #btnImport, #btnExport { display: none !important; }
+
 @media (min-width: 1024px) {
 
   body { overflow: hidden; }
@@ -941,12 +949,6 @@ body {
     border-radius: 10px;
     padding: 10px 12px !important;
   }
-
-  /* ── Admin bar: Seed DB / Import / Export JSON were setup/migration
-        tools. Since admin edits now write straight to the live database,
-        hide them on desktop to cut clutter. (Mobile is untouched — they
-        still show there.) ── */
-  #btnSeedDb, #btnImport, #btnExport { display: none !important; }
 
   /* ── Driver card popup — opened by clicking a name or a phone number
         in the table. Shows a clean, readable card; clicking a number
