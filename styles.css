@@ -770,6 +770,11 @@ body {
       an actually-missing element there would throw. ── */
 #btnSeedDb, #btnImport, #btnExport { display: none !important; }
 
+/* File Management (bulk Excel/CSV backup + restore) is a desktop-only admin
+   action — awkward to use on a phone, so hidden on mobile and shown only at
+   desktop widths below. */
+#btnFileManagement { display: none; }
+
 @media (min-width: 1024px) {
 
   body { overflow: hidden; }
@@ -840,6 +845,7 @@ body {
   .header .filter-btns { display: none; }
   .header-sub-mobile  { display: none; }
   .header-sub-desktop { display: inline; }
+  #btnFileManagement  { display: inline-block; }
 
   /* ── Table replaces the card list; fab replaced by sidebar button ── */
   #cardList { display: none; }
