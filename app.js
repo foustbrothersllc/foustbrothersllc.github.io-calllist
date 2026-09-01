@@ -647,6 +647,33 @@ function initApp() {
     setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
   }
 
+  // ── Desktop detection — on a wide screen, tapping a phone number
+  // copies it directly instead of opening the mobile Call/Text/Copy/Save
+  // action sheet (there's no phone app to call or text from on a desktop). ──
+  function isDesktopViewport() {
+    return window.matchMedia('(min-width: 1024px)').matches;
+  }
+  function copyPhoneDirect(digits, btn) {
+    const formatted = formatPhone(digits);
+    const numEl = btn.querySelector('.phone-number');
+    const original = numEl ? numEl.textContent : formatted;
+    function showCopied() {
+      if (!numEl) return;
+      numEl.textContent = '✅ Copied!';
+      setTimeout(function() { numEl.textContent = original; }, 1400);
+    }
+    navigator.clipboard.writeText(formatted).then(showCopied).catch(function() {
+      const ta = document.createElement('textarea');
+      ta.value = formatted;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      showCopied();
+    });
+  }
+
   // ── Phone action sheet (tap on primary number) ──────────────
   function showPhoneActionSheet(digits, driver) {
     const existing = document.getElementById('phoneActionSheet');
@@ -770,7 +797,11 @@ function initApp() {
     numBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       haptic('light');
-      showPhoneActionSheet(digits, driver);
+      if (isDesktopViewport()) {
+        copyPhoneDirect(digits, numBtn);
+      } else {
+        showPhoneActionSheet(digits, driver);
+      }
     });
     wrap.appendChild(numBtn);
     return wrap;
@@ -1147,10 +1178,11 @@ function initApp() {
   }
   function applyFilter() {
     const query = searchBox.value.toLowerCase().trim();
+    const queryWords = query ? query.split(/\s+/).filter(Boolean) : [];
     let visible = 0;
     allCards.forEach(function(outer) {
       const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
-      const textMatch = !query || outer.dataset.search.includes(query);
+      const textMatch = queryWords.length === 0 || queryWords.every(function(w) { return outer.dataset.search.includes(w); });
       const show = locMatch && textMatch;
       outer.style.display = show ? '' : 'none';
       if (show) visible++;
