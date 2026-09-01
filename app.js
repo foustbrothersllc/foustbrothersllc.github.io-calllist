@@ -484,8 +484,6 @@ function initApp() {
   const importCancel    = document.getElementById('importCancel');
   const importConfirm   = document.getElementById('importConfirm');
   const importFileInput = document.getElementById('importFileInput');
-  const importDropzone     = document.getElementById('importDropzone');
-  const importDropzoneText = document.getElementById('importDropzoneText');
   const importStatus    = document.getElementById('importStatus');
   const importProgressWrap = document.getElementById('importProgressWrap');
   const importProgressBar  = document.getElementById('importProgressBar');
@@ -1147,15 +1145,10 @@ function initApp() {
   }
   function applyFilter() {
     const query = searchBox.value.toLowerCase().trim();
-    // Match each typed word independently (order-insensitive) instead of one
-    // exact-phrase substring check — dataset.search stores "lastname firstname
-    // ...", so typing a first name then a last name ("Jacob Foust") used to
-    // never match "foust jacob ..." and silently blanked the list.
-    const queryWords = query ? query.split(/\s+/).filter(Boolean) : [];
     let visible = 0;
     allCards.forEach(function(outer) {
       const locMatch  = activeFilter === 'all' || outer.dataset.location === activeFilter;
-      const textMatch = queryWords.length === 0 || queryWords.every(function(w) { return outer.dataset.search.includes(w); });
+      const textMatch = !query || outer.dataset.search.includes(query);
       const show = locMatch && textMatch;
       outer.style.display = show ? '' : 'none';
       if (show) visible++;
@@ -2086,67 +2079,6 @@ function initApp() {
     updateBackupLabel();
   }
 
-  // ── Export Excel (.xlsx) — full backup, every phone number included ──
-  // Uses the same SheetJS library already loaded for Import (xlsx.full.min.js).
-  function exportExcel() {
-    const rows = Array.from(driverMap.values()).map(function(d) {
-      const phones = normalizePhones(Object.assign({}, d)).phones;
-      const row = {
-        'Last Name': d.lastName || '',
-        'First Name': d.firstName || '',
-        'Location': d.location || '',
-      };
-      for (let i = 0; i < MAX_PHONES; i++) {
-        const p = phones[i];
-        row['Phone ' + (i + 1)] = p ? formatPhone(p.digits) : '';
-        row['Label ' + (i + 1)] = p && p.label ? p.label : '';
-      }
-      row['Last Edited'] = d.updatedAt || '';
-      return row;
-    });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    XLSX.writeFile(wb, 'drivers-backup-' + new Date().toISOString().slice(0, 10) + '.xlsx');
-    // Record backup timestamp for the admin bar reminder
-    localStorage.setItem('dcl_last_backup', String(Date.now()));
-    updateBackupLabel();
-  }
-
-  // ── File Management modal — a single entry point next to Retired for
-  // the two backup actions admins actually use day-to-day ──────────────
-  function openFileManagementModal() {
-    let modal = document.getElementById('fileManagementModal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'fileManagementModal';
-      modal.className = 'modal-backdrop';
-      modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
-      modal.innerHTML = '<div class="modal" style="max-width:420px;border-top-color:#351C15;">'
-        + '<div class="modal-icon">📁</div>'
-        + '<h2 class="modal-title">File Management</h2>'
-        + '<p class="modal-body" style="margin-bottom:16px;">Back up or restore the driver list.</p>'
-        + '<div style="display:flex;flex-direction:column;gap:10px;">'
-        + '<button type="button" id="fmUploadBtn" class="btn-admin" style="width:100%;">📤 Upload Excel or CSV</button>'
-        + '<button type="button" id="fmDownloadBtn" class="btn-admin" style="width:100%;">📥 Download Excel</button>'
-        + '</div>'
-        + '<div class="modal-actions" style="margin-top:16px;"><button class="btn-modal-cancel" id="fmClose">Close</button></div>'
-        + '</div>';
-      document.getElementById('appWrapper').appendChild(modal);
-      document.getElementById('fmClose').addEventListener('click', function() { modal.classList.remove('open'); });
-      modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
-      document.getElementById('fmUploadBtn').addEventListener('click', function() {
-        modal.classList.remove('open');
-        openImportModal();
-      });
-      document.getElementById('fmDownloadBtn').addEventListener('click', function() {
-        exportExcel();
-        modal.classList.remove('open');
-      });
-    }
-    modal.classList.add('open');
-  }
-
   function updateBackupLabel() {
     const el = document.getElementById('backupAgeLabel');
     if (!el) return;
@@ -2240,39 +2172,8 @@ function initApp() {
   }
 
   // ── Import modal ─────────────────────────────────────────────
-  const IMPORT_DROPZONE_DEFAULT_TEXT = 'Drag a .csv, .xlsx, or .json file here, or tap to browse';
-  function setImportDropzoneFile(filename) {
-    if (filename) {
-      importDropzoneText.textContent = '📄 ' + filename + ' — ready to import';
-      importDropzone.classList.add('has-file');
-    } else {
-      importDropzoneText.textContent = IMPORT_DROPZONE_DEFAULT_TEXT;
-      importDropzone.classList.remove('has-file');
-    }
-  }
-  importDropzone.addEventListener('click', function() { importFileInput.click(); });
-  importDropzone.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); importFileInput.click(); }
-  });
-  importDropzone.addEventListener('dragover', function(e) { e.preventDefault(); importDropzone.classList.add('dragover'); });
-  importDropzone.addEventListener('dragleave', function() { importDropzone.classList.remove('dragover'); });
-  importDropzone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    importDropzone.classList.remove('dragover');
-    const dropped = e.dataTransfer && e.dataTransfer.files;
-    if (dropped && dropped.length) {
-      importFileInput.files = dropped;
-      setImportDropzoneFile(dropped[0].name);
-    }
-  });
-  importFileInput.addEventListener('change', function() {
-    const f = importFileInput.files && importFileInput.files[0];
-    setImportDropzoneFile(f ? f.name : null);
-  });
-
   function openImportModal() {
     importFileInput.value = '';
-    setImportDropzoneFile(null);
     importStatus.textContent = '';
     importConfirm.disabled = false;
     importConfirm.textContent = 'Import';
@@ -2309,13 +2210,11 @@ function initApp() {
       return { fileContent: lines.join('\n') };
     }
 
-    if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
-      // Parse Excel (or CSV, read as text — SheetJS parses either the same way
-      // once loaded) directly in the browser — no AI or Edge Function needed.
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      // Parse Excel directly in the browser — no AI or Edge Function needed.
       // Columns: Last Name, First Name, Cell Phone, Secondary/Emergency
-      const wb = name.endsWith('.csv')
-        ? XLSX.read(await file.text(), { type: 'string' })
-        : XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const buffer    = await file.arrayBuffer();
+      const wb        = XLSX.read(buffer, { type: 'array' });
       const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
       const ws        = wb.Sheets[sheetName];
       const rows      = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
@@ -2341,12 +2240,12 @@ function initApp() {
       return { fileType: 'json', fileContent: null, drivers: data };
     }
 
-    throw new Error('Unsupported file type. Use PDF, Excel (.xlsx), CSV, or JSON.');
+    throw new Error('Unsupported file type. Use PDF, Excel (.xlsx), or JSON.');
   }
 
   async function runImport() {
     const file = importFileInput.files[0];
-    if (!file) { importStatus.textContent = '⚠️ Please choose a PDF, Excel, CSV, or JSON file first.'; return; }
+    if (!file) { importStatus.textContent = '⚠️ Please choose a PDF, Excel, or JSON file first.'; return; }
 
     importConfirm.disabled = true;
     importConfirm.textContent = 'Analyzing…';
@@ -2637,28 +2536,12 @@ function initApp() {
 
   btnSave.addEventListener('click', saveDriver);
 
-  // Enter key saves the driver from any plain text field in the Add/Edit
-  // panel (first name, last name, a phone number, a phone label) — scoped
-  // to text/tel inputs only, so it never interferes with the location
-  // dropdown's own native Enter handling or the "+ Add another number" /
-  // remove / drag-handle buttons' normal Enter-activates-button behavior.
-  addPanel.addEventListener('keydown', function(e) {
-    if (e.key !== 'Enter') return;
-    const tag = e.target.tagName;
-    if (tag !== 'INPUT') return;
-    const type = (e.target.type || '').toLowerCase();
-    if (type !== 'text' && type !== 'tel') return;
-    e.preventDefault();
-    btnSave.click();
-  });
-
   document.getElementById('btnAdminLogin').addEventListener('click', promptAdminLogin);
   document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
   document.getElementById('btnRetired').addEventListener('click', openRetiredModal);
-  document.getElementById('btnFileManagement').addEventListener('click', openFileManagementModal);
   document.getElementById('btnExport').addEventListener('click', exportJson);
 
   // ── Boot ─────────────────────────────────────────────────────

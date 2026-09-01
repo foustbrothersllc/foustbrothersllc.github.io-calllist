@@ -52,31 +52,11 @@
       </svg>
     </div>
 
-
-    <!-- ── Desktop-only sidebar (hidden on mobile — see desktop block in styles.css) ── -->
-    <aside class="desktop-sidebar" id="desktopSidebar">
-      <div class="ds-section">
-        <h3 class="ds-heading">🔍 Search &amp; Filter</h3>
-        <input type="search" id="desktopSearch" class="ds-search" placeholder="Search by name or number…" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search drivers">
-      </div>
-      <div class="ds-section">
-        <span class="ds-label">Location</span>
-        <button type="button" class="ds-filter active" data-loc="all">All</button>
-        <button type="button" class="ds-filter" data-loc="greensboro">GRENC</button>
-        <button type="button" class="ds-filter" data-loc="mebane">MEBNC</button>
-      </div>
-      <div class="ds-spacer"></div>
-      <div class="ds-section ds-bottom">
-        <button type="button" id="desktopAddBtn" class="ds-add" style="display:none">＋ Add Driver</button>
-      </div>
-    </aside>
-
     <header class="header">
       <div class="header-top">
         <div class="header-title">
           <h1>Driver Call List</h1>
-          <span class="header-sub header-sub-mobile">Click-to-Call Directory</span>
-          <span class="header-sub header-sub-desktop">Company Driver Directory</span>
+          <span class="header-sub">Click-to-Call Directory</span>
         </div>
         <button id="btnAdminLogin" class="btn-header-icon" title="Admin login">🔑</button>
         <button id="btnAdminLogoutHeader" class="btn-header-icon" title="Admin logout" style="display:none;border-color:rgba(255,100,100,0.5);color:rgba(255,150,150,0.85);">🔓</button>
@@ -115,7 +95,6 @@
         <button id="btnImport"    class="btn-admin">📋 Import</button>
         <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
         <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
-        <button id="btnFileManagement" class="btn-admin">📁 File Management</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
       </div>
     </header>
@@ -183,7 +162,7 @@
       <div class="modal" style="max-width:420px;border-top-color:#351C15;">
         <div class="modal-icon">📋</div>
         <h2 class="modal-title" id="importModalTitle">Import Driver List</h2>
-        <p class="modal-body">Upload an <code>.xlsx</code>, <code>.csv</code>, or <code>.json</code> file. Existing drivers will be updated, new ones added.</p>
+        <p class="modal-body">Upload an <code>.xlsx</code> or <code>.json</code> file. Existing drivers will be updated, new ones added.</p>
 
         <!-- Progress bar -->
         <div id="importProgressWrap" style="display:none;margin-bottom:10px;">
@@ -194,14 +173,8 @@
         </div>
 
         <div style="margin-bottom:14px;">
-          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#FFB500;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel, CSV, or JSON file</label>
-          <div id="importDropzone" class="import-dropzone" tabindex="0" role="button" aria-label="Choose a file to import, or drag one here">
-            <div class="import-dropzone-icon" aria-hidden="true">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.2 4.2 0 0 1-.6-8.35 5.5 5.5 0 0 1 10.79-1.94A4.2 4.2 0 0 1 17.5 18H7z"/><path d="M12 11v7"/><path d="M9 13.5 12 11l3 2.5"/></svg>
-            </div>
-            <p class="import-dropzone-text" id="importDropzoneText">Drag a .csv, .xlsx, or .json file here, or tap to browse</p>
-          </div>
-          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.csv,text/csv,.json,application/json" style="display:none;">
+          <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#FFB500;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel or JSON file</label>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;color:#351C15;">
         </div>
 
         <!-- Update log -->
@@ -251,24 +224,6 @@
     <!-- FAB -->
     <button class="fab" id="fabAdd" aria-label="Add driver" style="display:none"><span>+</span></button>
 
-    <!-- ── Desktop-only table view (hidden on mobile — see desktop block in styles.css) ── -->
-    <div class="desktop-table-wrap" id="desktopTableWrap">
-      <table class="desktop-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Primary Phone</th>
-            <th>Other Numbers</th>
-            <th>Location</th>
-            <th>Last Edited</th>
-            <th class="dt-th-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="desktopTableBody"></tbody>
-      </table>
-      <div id="desktopTableEmpty" class="dt-empty">No drivers found matching your search.</div>
-    </div>
-
     <!-- Card list -->
     <main class="list" id="cardList">
       <div id="noResults" role="status">No drivers found matching your search.</div>
@@ -301,6 +256,5 @@
   <!-- SheetJS for Excel parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script type="module" src="app.js?v=3"></script>
-  <script src="desktop.js?v=1" defer></script>
 </body>
 </html>
