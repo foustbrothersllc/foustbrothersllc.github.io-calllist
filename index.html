@@ -179,7 +179,13 @@
 
         <div style="margin-bottom:14px;">
           <label for="importFileInput" style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#FFB500;text-transform:uppercase;letter-spacing:0.5px;">Choose Excel or JSON file</label>
-          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="width:100%;padding:8px;border:1.5px solid #e5d5cc;border-radius:9px;font-size:14px;background:#f5ede8;color:#351C15;">
+          <div id="importDropzone" class="import-dropzone" tabindex="0" role="button" aria-label="Choose a file to import, or drag one here">
+            <div class="import-dropzone-icon" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.2 4.2 0 0 1-.6-8.35 5.5 5.5 0 0 1 10.79-1.94A4.2 4.2 0 0 1 17.5 18H7z"/><path d="M12 11v7"/><path d="M9 13.5 12 11l3 2.5"/></svg>
+            </div>
+            <p class="import-dropzone-text" id="importDropzoneText">Drag a .xlsx or .json file here, or tap to browse</p>
+          </div>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.json,application/json" style="display:none;">
         </div>
 
         <!-- Update log -->
