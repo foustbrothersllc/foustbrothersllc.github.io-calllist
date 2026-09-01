@@ -2079,6 +2079,41 @@ function initApp() {
     updateBackupLabel();
   }
 
+  // ── Import / Export modal — combines the two separate admin actions
+  // into one button. Each option just calls the existing, unchanged
+  // openImportModal()/exportJson() functions — nothing about how import
+  // or export actually work has changed, only how they're reached. ──
+  function openFileManagementModal() {
+    let modal = document.getElementById('fileManagementModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'fileManagementModal';
+      modal.className = 'modal-backdrop';
+      modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
+      modal.innerHTML = '<div class="modal" style="max-width:380px;border-top-color:#351C15;">'
+        + '<div class="modal-icon">📁</div>'
+        + '<h2 class="modal-title">Import / Export</h2>'
+        + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px;">'
+        + '<button type="button" id="fmImportBtn" class="btn-admin" style="width:100%;">📋 Import</button>'
+        + '<button type="button" id="fmExportBtn" class="btn-admin" style="width:100%;">💾 Export JSON</button>'
+        + '</div>'
+        + '<div class="modal-actions" style="margin-top:16px;"><button class="btn-modal-cancel" id="fmClose">Close</button></div>'
+        + '</div>';
+      document.getElementById('appWrapper').appendChild(modal);
+      document.getElementById('fmClose').addEventListener('click', function() { modal.classList.remove('open'); });
+      modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
+      document.getElementById('fmImportBtn').addEventListener('click', function() {
+        modal.classList.remove('open');
+        openImportModal();
+      });
+      document.getElementById('fmExportBtn').addEventListener('click', function() {
+        exportJson();
+        modal.classList.remove('open');
+      });
+    }
+    modal.classList.add('open');
+  }
+
   function updateBackupLabel() {
     const el = document.getElementById('backupAgeLabel');
     if (!el) return;
@@ -2540,6 +2575,7 @@ function initApp() {
   document.getElementById('btnAdminLogoutHeader').addEventListener('click', adminLogout);
   document.getElementById('btnSeedDb').addEventListener('click', manualSeed);
   document.getElementById('btnImport').addEventListener('click', openImportModal);
+  document.getElementById('btnFileManagement').addEventListener('click', openFileManagementModal);
   document.getElementById('btnScanDups').addEventListener('click', openDupModal);
   document.getElementById('btnRetired').addEventListener('click', openRetiredModal);
   document.getElementById('btnExport').addEventListener('click', exportJson);
