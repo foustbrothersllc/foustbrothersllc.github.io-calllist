@@ -2079,10 +2079,38 @@ function initApp() {
     updateBackupLabel();
   }
 
+  // ── Export Excel (.xlsx) — full backup, every phone number included.
+  // Uses the same SheetJS library already loaded for Import (xlsx.full.min.js). ──
+  function exportExcel() {
+    const rows = Array.from(driverMap.values()).map(function(d) {
+      const phones = normalizePhones(Object.assign({}, d)).phones;
+      const row = {
+        'Last Name': d.lastName || '',
+        'First Name': d.firstName || '',
+        'Location': d.location || '',
+      };
+      for (let i = 0; i < MAX_PHONES; i++) {
+        const p = phones[i];
+        row['Phone ' + (i + 1)] = p ? formatPhone(p.digits) : '';
+        row['Label ' + (i + 1)] = p && p.label ? p.label : '';
+      }
+      row['Last Edited'] = d.updatedAt || '';
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, 'drivers-backup-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+    // Record backup timestamp for the admin bar reminder
+    localStorage.setItem('dcl_last_backup', String(Date.now()));
+    updateBackupLabel();
+  }
+
   // ── Import / Export modal — combines the two separate admin actions
-  // into one button. Each option just calls the existing, unchanged
-  // openImportModal()/exportJson() functions — nothing about how import
-  // or export actually work has changed, only how they're reached. ──
+  // into one button. Import calls the existing, unchanged openImportModal();
+  // Export now produces a real Excel (.xlsx) backup via exportExcel() —
+  // the original exportJson() is untouched and still wired to the hidden
+  // #btnExport element so nothing that referenced it breaks. ──
   function openFileManagementModal() {
     let modal = document.getElementById('fileManagementModal');
     if (!modal) {
@@ -2095,7 +2123,7 @@ function initApp() {
         + '<h2 class="modal-title">Import / Export</h2>'
         + '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px;">'
         + '<button type="button" id="fmImportBtn" class="btn-admin" style="width:100%;">📋 Import</button>'
-        + '<button type="button" id="fmExportBtn" class="btn-admin" style="width:100%;">💾 Export JSON</button>'
+        + '<button type="button" id="fmExportBtn" class="btn-admin" style="width:100%;">💾 Export Excel</button>'
         + '</div>'
         + '<div class="modal-actions" style="margin-top:16px;"><button class="btn-modal-cancel" id="fmClose">Close</button></div>'
         + '</div>';
@@ -2107,7 +2135,7 @@ function initApp() {
         openImportModal();
       });
       document.getElementById('fmExportBtn').addEventListener('click', function() {
-        exportJson();
+        exportExcel();
         modal.classList.remove('open');
       });
     }
