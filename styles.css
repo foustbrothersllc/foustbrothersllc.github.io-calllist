@@ -177,6 +177,10 @@ body {
   border-color: rgba(255,100,100,0.5);
   color: rgba(255,150,150,0.85);
 }
+/* Seed DB is retired, and Import/Export are combined into one button
+   (#btnFileManagement) — the originals stay in the HTML (see index.html
+   comment) so app.js's existing lookups don't throw, just hidden here. */
+#btnSeedDb, #btnImport, #btnExport { display: none !important; }
 
 .search-wrap {
   position: relative;
