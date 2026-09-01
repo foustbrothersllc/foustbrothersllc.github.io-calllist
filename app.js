@@ -1,22 +1,4 @@
-/* ============================================================
-   Driver Call List — app.js
-   ============================================================
-   Features:
-   - Global access key gate + WebAuthn biometric unlock
-   - AES-256 encryption of phone numbers in Firestore
-   - Admin password protection for settings/DB controls
-   - No UPS branding
-   - PDF + JSON import via pdf.js
-   - Regex phone normalisation + SLIC standardisation
-   - Visual progress bar during import
-   - O(1) Set duplicate detection
-   - Scan for Duplicates button
-   - 3-version PDF update log
-   - Export Master JSON button
-   - Call + Text buttons for primary numbers
-   - Multi-select checkboxes (admin only)
-   - Long-press required to delete
-   - Mobile search zoom disabled (font-size:16px)
+(font-size:16px)
    ============================================================ */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -808,6 +790,107 @@ function initApp() {
   }
 
   // ── Build card ───────────────────────────────────────────────
+  // ── Enlarged contact bottom sheet (desktop accessibility) ──
+  function showEnlargedContact(driver) {
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.4);';
+    
+    // Create bottom sheet
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-radius:24px 24px 0 0;padding:24px 20px 40px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 24px rgba(0,0,0,0.15);animation:slideUp 0.3s ease;';
+    
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = '@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }';
+    document.head.appendChild(style);
+    
+    // Name
+    const nameEl = document.createElement('h2');
+    const displayName = nameOrder === 'first'
+      ? driver.firstName + ' ' + driver.lastName
+      : driver.lastName + ', ' + driver.firstName;
+    nameEl.textContent = displayName;
+    nameEl.style.cssText = 'font-size:36px;font-weight:800;color:#351C15;margin:0 0 20px 0;text-align:center;line-height:1.2;';
+    sheet.appendChild(nameEl);
+    
+    // Phone numbers
+    const phoneList = (driver.phones || []).filter(function(p) { return p && p.digits; });
+    if (phoneList.length > 0) {
+      const phonesContainer = document.createElement('div');
+      phonesContainer.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+      
+      phoneList.forEach(function(p, i) {
+        const phoneRow = document.createElement('div');
+        phoneRow.style.cssText = 'text-align:center;';
+        
+        // Label if present
+        if (p.label) {
+          const label = document.createElement('div');
+          label.textContent = p.label;
+          label.style.cssText = 'font-size:13px;font-weight:600;color:#7a6055;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;';
+          phoneRow.appendChild(label);
+        }
+        
+        // Phone number
+        const number = document.createElement('div');
+        number.textContent = p.display || p.digits;
+        number.style.cssText = 'font-size:28px;font-weight:700;color:#351C15;font-family:monospace;letter-spacing:1px;line-height:1.3;';
+        phoneRow.appendChild(number);
+        
+        phonesContainer.appendChild(phoneRow);
+      });
+      sheet.appendChild(phonesContainer);
+    } else {
+      const none = document.createElement('div');
+      none.textContent = '⚠️ No phone number on file';
+      none.style.cssText = 'font-size:16px;font-weight:600;color:#b91c1c;text-align:center;padding:20px;';
+      sheet.appendChild(none);
+    }
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Close';
+    closeBtn.style.cssText = 'width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s ease;';
+    closeBtn.addEventListener('mouseover', function() {
+      closeBtn.style.background = '#f5ede8';
+      closeBtn.style.borderColor = '#d5c5bc';
+    });
+    closeBtn.addEventListener('mouseout', function() {
+      closeBtn.style.background = '#fff';
+      closeBtn.style.borderColor = '#e5d5cc';
+    });
+    closeBtn.addEventListener('click', function() {
+      close();
+    });
+    sheet.appendChild(closeBtn);
+    
+    // Close functions
+    function close() {
+      sheet.style.animation = 'slideUp 0.3s ease reverse';
+      setTimeout(function() {
+        backdrop.remove();
+        sheet.remove();
+        style.remove();
+      }, 300);
+    }
+    
+    // Close on backdrop click
+    backdrop.addEventListener('click', close);
+    
+    // Close on Escape key
+    const escapeHandler = function(e) {
+      if (e.key === 'Escape') {
+        close();
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    document.body.appendChild(backdrop);
+    document.body.appendChild(sheet);
+  }
+
   function buildCard(driver) {
     const key = driverKey(driver.lastName, driver.firstName);
 
@@ -920,6 +1003,22 @@ function initApp() {
       card.addEventListener('mouseup',    cancelPress);
       card.addEventListener('mouseleave', cancelPress);
     }
+
+    // ── Click to enlarge (all users) ──────────────────────────
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function(e) {
+      // Don't open enlarged view if clicking on edit button or checkbox
+      if (e.target.classList.contains('btn-edit') || 
+          e.target.classList.contains('card-checkbox') ||
+          e.target.closest('.card-checkbox')) {
+        return;
+      }
+      // If admin is long-pressing, don't open enlarged view
+      if (isAdmin && document.activeElement === card) {
+        return;
+      }
+      showEnlargedContact(driver);
+    });
 
     return outer;
   }
@@ -2354,7 +2453,7 @@ function initApp() {
         const phone = String(row[2] || '').trim();
         const alt   = String(row[3] || '').trim();
         if (!last || !first || SKIP.test(last) || SKIP.test(first)) return;
-        function cleanNum(s) { return s.replace(/\s*(E|C|2nd|1st|call\s*1st|emergency|cell).*/i, '').trim(); }
+        function cleanNum(s) { return s.replace(/\s*(E|C|2nd|1st|call\s*1st|emergency|cell).*/i, '').trim(); }
         drivers.push({ lastName: last, firstName: first, rawPhone: cleanNum(phone), rawAlt: cleanNum(alt) });
       });
       return { fileType: 'xlsx', drivers: drivers };
