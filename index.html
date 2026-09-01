@@ -91,8 +91,13 @@
 
       <!-- Admin bar (hidden by default) -->
       <div id="adminBar" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
+        <!-- Seed DB, and the separate Import/Export buttons, are kept in the
+             DOM (hidden below) rather than deleted, since app.js still looks
+             them up (getElementById + addEventListener) during startup and
+             an actually-missing element there would throw. -->
         <button id="btnSeedDb"    class="btn-admin">🌱 Seed DB</button>
         <button id="btnImport"    class="btn-admin">📋 Import</button>
+        <button id="btnFileManagement" class="btn-admin">📁 Import / Export</button>
         <button id="btnScanDups"  class="btn-admin">🧹 List Cleanup</button>
         <button id="btnRetired"    class="btn-admin">🏷 Retired</button>
         <button id="btnExport"    class="btn-admin">💾 Export JSON</button>
