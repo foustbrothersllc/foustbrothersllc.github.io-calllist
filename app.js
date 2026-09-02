@@ -782,8 +782,10 @@ function initApp() {
       e.stopPropagation();
       haptic('light');
       if (isDesktopViewport()) {
-        copyPhoneDirect(digits, numBtn);
+        // Desktop: show enlarged contact view
+        showEnlargedContact(driver);
       } else {
+        // Mobile: show action sheet
         showPhoneActionSheet(digits, driver);
       }
     });
@@ -794,34 +796,40 @@ function initApp() {
   // ── Build card ───────────────────────────────────────────────
   // ── Enlarged contact bottom sheet (desktop accessibility) ──
   function showEnlargedContact(driver) {
+    const existing = document.getElementById('enlargedContactSheet');
+    if (existing) existing.remove();
+
     // Create backdrop
     const backdrop = document.createElement('div');
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.4);';
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(53,28,21,0.45);backdrop-filter:blur(3px);';
     
-    // Create bottom sheet
+    // Create bottom sheet — matches mobile phone action sheet theme
     const sheet = document.createElement('div');
-    sheet.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fff;border-radius:24px 24px 0 0;padding:24px 20px 40px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 24px rgba(0,0,0,0.15);animation:slideUp 0.3s ease;';
-    
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = '@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }';
-    document.head.appendChild(style);
-    
+    sheet.id = 'enlargedContactSheet';
+    sheet.style.cssText = [
+      'position:fixed;inset:0;z-index:9001;',
+      'display:flex;align-items:flex-end;justify-content:center;',
+    ].join('');
+
+    const box = document.createElement('div');
+    box.style.cssText = [
+      'background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 36px;',
+      'width:100%;max-width:420px;box-shadow:0 -4px 24px rgba(53,28,21,0.18);',
+      'display:flex;flex-direction:column;gap:12px;',
+    ].join('');
+
     // Name
-    const nameEl = document.createElement('h2');
+    const nameEl = document.createElement('p');
     const displayName = nameOrder === 'first'
       ? driver.firstName + ' ' + driver.lastName
       : driver.lastName + ', ' + driver.firstName;
     nameEl.textContent = displayName;
-    nameEl.style.cssText = 'font-size:36px;font-weight:800;color:#351C15;margin:0 0 20px 0;text-align:center;line-height:1.2;';
-    sheet.appendChild(nameEl);
+    nameEl.style.cssText = 'text-align:center;font-size:36px;font-weight:800;color:#351C15;margin:0 0 8px;line-height:1.2;';
+    box.appendChild(nameEl);
     
     // Phone numbers
     const phoneList = (driver.phones || []).filter(function(p) { return p && p.digits; });
     if (phoneList.length > 0) {
-      const phonesContainer = document.createElement('div');
-      phonesContainer.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
-      
       phoneList.forEach(function(p, i) {
         const phoneRow = document.createElement('div');
         phoneRow.style.cssText = 'text-align:center;';
@@ -830,7 +838,7 @@ function initApp() {
         if (p.label) {
           const label = document.createElement('div');
           label.textContent = p.label;
-          label.style.cssText = 'font-size:13px;font-weight:600;color:#7a6055;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;';
+          label.style.cssText = 'font-size:12px;font-weight:700;color:#7a6055;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;';
           phoneRow.appendChild(label);
         }
         
@@ -840,41 +848,30 @@ function initApp() {
         number.style.cssText = 'font-size:28px;font-weight:700;color:#351C15;font-family:monospace;letter-spacing:1px;line-height:1.3;';
         phoneRow.appendChild(number);
         
-        phonesContainer.appendChild(phoneRow);
+        box.appendChild(phoneRow);
       });
-      sheet.appendChild(phonesContainer);
     } else {
       const none = document.createElement('div');
       none.textContent = '⚠️ No phone number on file';
-      none.style.cssText = 'font-size:16px;font-weight:600;color:#b91c1c;text-align:center;padding:20px;';
-      sheet.appendChild(none);
+      none.style.cssText = 'font-size:15px;font-weight:600;color:#b91c1c;text-align:center;padding:16px;';
+      box.appendChild(none);
     }
     
     // Close button
     const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕ Close';
-    closeBtn.style.cssText = 'width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1.5px solid #e5d5cc;background:#fff;color:#7a6055;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s ease;';
-    closeBtn.addEventListener('mouseover', function() {
-      closeBtn.style.background = '#f5ede8';
-      closeBtn.style.borderColor = '#d5c5bc';
-    });
-    closeBtn.addEventListener('mouseout', function() {
-      closeBtn.style.background = '#fff';
-      closeBtn.style.borderColor = '#e5d5cc';
-    });
-    closeBtn.addEventListener('click', function() {
-      close();
-    });
-    sheet.appendChild(closeBtn);
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = [
+      'padding:13px;border-radius:12px;border:1.5px solid #e5d5cc;',
+      'background:#fff;color:#7a6055;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;'
+    ].join('');
+    closeBtn.addEventListener('click', close);
+    box.appendChild(closeBtn);
+
+    sheet.appendChild(box);
     
     // Close functions
     function close() {
-      sheet.style.animation = 'slideUp 0.3s ease reverse';
-      setTimeout(function() {
-        backdrop.remove();
-        sheet.remove();
-        style.remove();
-      }, 300);
+      sheet.remove();
     }
     
     // Close on backdrop click
