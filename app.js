@@ -883,6 +883,11 @@ function initApp() {
     // Close on backdrop click
     backdrop.addEventListener('click', close);
     
+    // Close when clicking anywhere outside the card box
+    sheet.addEventListener('click', function(e) {
+      if (e.target === sheet) close();
+    });
+    
     // Close on Escape key
     const escapeHandler = function(e) {
       if (e.key === 'Escape') {
