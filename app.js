@@ -816,10 +816,10 @@ function initApp() {
 
     const box = document.createElement('div');
     box.style.cssText = [
-      'background:var(--white);border-radius:18px 18px 0 0;padding:24px 20px 40px;',
-      'width:100%;max-width:700px;box-shadow:0 -6px 30px rgba(53,28,21,0.22);',
+      'background:#ffffff;border-radius:18px 18px 0 0;padding:24px 20px 40px;',
+      'width:100%;max-width:700px;box-shadow:0 -6px 30px rgba(0,0,0,0.22);',
       'display:flex;flex-direction:column;gap:10px;',
-      'border-left:3px solid var(--gold);'
+      'border-left:3px solid #FFB500;'
     ].join('');
 
     // Name
@@ -828,7 +828,7 @@ function initApp() {
       ? driver.firstName + ' ' + driver.lastName
       : driver.lastName + ', ' + driver.firstName;
     nameEl.textContent = displayName;
-    nameEl.style.cssText = 'text-align:center;font-size:38px;font-weight:800;color:var(--brown);margin:0 0 12px;line-height:1.2;';
+    nameEl.style.cssText = 'text-align:center;font-size:38px;font-weight:800;color:#000000;margin:0 0 12px;line-height:1.2;';
     box.appendChild(nameEl);
     
     // Phone numbers
@@ -842,14 +842,14 @@ function initApp() {
         if (p.label) {
           const label = document.createElement('div');
           label.textContent = p.label;
-          label.style.cssText = 'font-size:13px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;';
+          label.style.cssText = 'font-size:13px;font-weight:700;color:#5a5a5a;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;';
           phoneRow.appendChild(label);
         }
         
         // Phone number
         const number = document.createElement('div');
         number.textContent = p.display || p.digits;
-        number.style.cssText = 'font-size:30px;font-weight:700;color:var(--brown);letter-spacing:1px;line-height:1.3;';
+        number.style.cssText = 'font-size:30px;font-weight:700;color:#000000;letter-spacing:1px;line-height:1.3;';
         phoneRow.appendChild(number);
         
         box.appendChild(phoneRow);
@@ -857,7 +857,7 @@ function initApp() {
     } else {
       const none = document.createElement('div');
       none.textContent = '⚠️ No phone number on file';
-      none.style.cssText = 'font-size:14px;font-weight:600;color:var(--danger);text-align:center;padding:14px;';
+      none.style.cssText = 'font-size:14px;font-weight:600;color:#b91c1c;text-align:center;padding:14px;';
       box.appendChild(none);
     }
     
@@ -865,8 +865,8 @@ function initApp() {
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     closeBtn.style.cssText = [
-      'padding:12px;border-radius:10px;border:1.5px solid var(--border);',
-      'background:var(--white);color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;'
+      'padding:12px;border-radius:10px;border:1.5px solid #e0e0e0;',
+      'background:#ffffff;color:#5a5a5a;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;'
     ].join('');
     closeBtn.addEventListener('click', close);
     box.appendChild(closeBtn);
