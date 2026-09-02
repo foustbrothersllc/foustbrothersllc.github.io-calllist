@@ -798,9 +798,12 @@ function initApp() {
   function showEnlargedContact(driver) {
     const existing = document.getElementById('enlargedContactSheet');
     if (existing) existing.remove();
+    const existingBackdrop = document.getElementById('enlargedContactBackdrop');
+    if (existingBackdrop) existingBackdrop.remove();
 
     // Create backdrop
     const backdrop = document.createElement('div');
+    backdrop.id = 'enlargedContactBackdrop';
     backdrop.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(53,28,21,0.45);backdrop-filter:blur(3px);';
     
     // Create bottom sheet — matches mobile phone action sheet theme
@@ -813,9 +816,10 @@ function initApp() {
 
     const box = document.createElement('div');
     box.style.cssText = [
-      'background:#fff;border-radius:18px 18px 0 0;padding:22px 20px 36px;',
-      'width:100%;max-width:420px;box-shadow:0 -4px 24px rgba(53,28,21,0.18);',
-      'display:flex;flex-direction:column;gap:12px;',
+      'background:#fff;border-radius:18px 18px 0 0;padding:24px 20px 40px;',
+      'width:100%;max-width:100%;box-shadow:0 -4px 24px rgba(53,28,21,0.18);',
+      'display:flex;flex-direction:column;gap:10px;',
+      'border-top:4px solid #351C15;'
     ].join('');
 
     // Name
@@ -824,7 +828,7 @@ function initApp() {
       ? driver.firstName + ' ' + driver.lastName
       : driver.lastName + ', ' + driver.firstName;
     nameEl.textContent = displayName;
-    nameEl.style.cssText = 'text-align:center;font-size:36px;font-weight:800;color:#351C15;margin:0 0 8px;line-height:1.2;';
+    nameEl.style.cssText = 'text-align:center;font-size:32px;font-weight:800;color:#351C15;margin:0 0 12px;line-height:1.2;';
     box.appendChild(nameEl);
     
     // Phone numbers
@@ -838,14 +842,14 @@ function initApp() {
         if (p.label) {
           const label = document.createElement('div');
           label.textContent = p.label;
-          label.style.cssText = 'font-size:12px;font-weight:700;color:#7a6055;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;';
+          label.style.cssText = 'font-size:11px;font-weight:700;color:#7a6055;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;';
           phoneRow.appendChild(label);
         }
         
         // Phone number
         const number = document.createElement('div');
         number.textContent = p.display || p.digits;
-        number.style.cssText = 'font-size:28px;font-weight:700;color:#351C15;font-family:monospace;letter-spacing:1px;line-height:1.3;';
+        number.style.cssText = 'font-size:24px;font-weight:700;color:#351C15;font-family:monospace;letter-spacing:1px;line-height:1.3;';
         phoneRow.appendChild(number);
         
         box.appendChild(phoneRow);
@@ -853,7 +857,7 @@ function initApp() {
     } else {
       const none = document.createElement('div');
       none.textContent = '⚠️ No phone number on file';
-      none.style.cssText = 'font-size:15px;font-weight:600;color:#b91c1c;text-align:center;padding:16px;';
+      none.style.cssText = 'font-size:14px;font-weight:600;color:#b91c1c;text-align:center;padding:14px;';
       box.appendChild(none);
     }
     
@@ -861,8 +865,8 @@ function initApp() {
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     closeBtn.style.cssText = [
-      'padding:13px;border-radius:12px;border:1.5px solid #e5d5cc;',
-      'background:#fff;color:#7a6055;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;'
+      'padding:12px;border-radius:12px;border:1.5px solid #e5d5cc;',
+      'background:#fff;color:#7a6055;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;'
     ].join('');
     closeBtn.addEventListener('click', close);
     box.appendChild(closeBtn);
@@ -871,7 +875,9 @@ function initApp() {
     
     // Close functions
     function close() {
+      backdrop.remove();
       sheet.remove();
+      document.removeEventListener('keydown', escapeHandler);
     }
     
     // Close on backdrop click
@@ -881,7 +887,6 @@ function initApp() {
     const escapeHandler = function(e) {
       if (e.key === 'Escape') {
         close();
-        document.removeEventListener('keydown', escapeHandler);
       }
     };
     document.addEventListener('keydown', escapeHandler);
