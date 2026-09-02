@@ -1,5 +1,7 @@
-(font-size:16px)
-   ============================================================ */
+/* ══════════════════════════════════════════════════════════════
+   Driver Call List — Encrypted Supabase + Offline Cache
+   ══════════════════════════════════════════════════════════════ */
+/* Design base: Segoe UI, 16px on desktop / 14px on mobile */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
