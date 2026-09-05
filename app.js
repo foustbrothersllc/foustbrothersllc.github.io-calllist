@@ -1013,21 +1013,26 @@ function initApp() {
       card.addEventListener('mouseleave', cancelPress);
     }
 
-    // ── Click to enlarge (all users) ──────────────────────────
-    card.style.cursor = 'pointer';
-    card.addEventListener('click', function(e) {
-      // Don't open enlarged view if clicking on edit button or checkbox
-      if (e.target.classList.contains('btn-edit') || 
-          e.target.classList.contains('card-checkbox') ||
-          e.target.closest('.card-checkbox')) {
-        return;
-      }
-      // If admin is long-pressing, don't open enlarged view
-      if (isAdmin && document.activeElement === card) {
-        return;
-      }
-      showEnlargedContact(driver);
-    });
+    // ── Click to enlarge (desktop only) ───────────────────────
+    // On mobile, tapping the card body (not the number) should do
+    // nothing — the number itself already opens the Call/Text/Copy
+    // sheet. This only "blows up" the contact on desktop-width screens.
+    if (isDesktopViewport()) {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', function(e) {
+        // Don't open enlarged view if clicking on edit button or checkbox
+        if (e.target.classList.contains('btn-edit') ||
+            e.target.classList.contains('card-checkbox') ||
+            e.target.closest('.card-checkbox')) {
+          return;
+        }
+        // If admin is long-pressing, don't open enlarged view
+        if (isAdmin && document.activeElement === card) {
+          return;
+        }
+        showEnlargedContact(driver);
+      });
+    }
 
     return outer;
   }
