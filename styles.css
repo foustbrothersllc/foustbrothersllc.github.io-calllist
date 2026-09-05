@@ -217,6 +217,21 @@ body {
 }
 #searchBox::placeholder { color: rgba(255,255,255,0.5); }
 #searchBox:focus { background: rgba(255,255,255,0.18); border-color: var(--gold); }
+/* Hide the browser's own built-in clear ("x") button on type="search" inputs —
+   we already show our own #searchClear button, so without this rule some
+   browsers (Chrome, Safari, Edge) show two x's stacked on top of each other. */
+#searchBox::-webkit-search-cancel-button,
+#searchBox::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+#searchBox::-ms-clear,
+#searchBox::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 .filter-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .filter-btn {
